@@ -52,6 +52,40 @@ If you cannot use `ssh-copy-id` (e.g., on Windows without WSL/Git Bash), you can
 cat ~/.ssh/id_ed25519.pub | ssh user@hostname "mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
 ```
 
+## Troubleshooting
+
+### Connection Refused (port 22)
+
+If you see `connect to host ... port 22: Connection refused`, it means the client cannot reach the SSH service on the target.
+
+**Possible Causes:**
+1.  **SSH Server not installed/running:** Fresh Ubuntu installations (especially Desktop versions) might not have `openssh-server` installed or enabled by default.
+2.  **Wrong IP Address:** Ensure `192.168.1.xxx` is actually the Pi's IP.
+3.  **Firewall:** `ufw` or another firewall might be blocking port 22.
+
+**Fixes (Run on the Raspberry Pi):**
+
+1.  **Install/Start SSH:**
+    ```bash
+    sudo apt update
+    sudo apt install openssh-server
+    sudo systemctl enable --now ssh
+    sudo systemctl status ssh  # Should say "active (running)"
+    ```
+
+2.  **Check IP Address:**
+    ```bash
+    ip addr show
+    # Look for eth0 or wlan0 inet address
+    ```
+
+3.  **Allow SSH in Firewall:**
+    ```bash
+    sudo ufw allow ssh
+    sudo ufw enable
+    sudo ufw reload
+    ```
+
 ## Verification
 
 After copying the ID, try logging in:
