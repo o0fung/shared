@@ -82,7 +82,44 @@ sudo networksetup -setdnsservers "Wi-Fi" 1.1.1.1 8.8.8.8
 
 If you use Ethernet instead of Wi-Fi, replace "Wi-Fi" with "Ethernet".
 
-## Step 6: Install Homebrew (package manager)
+## Step 6: Check why your IP looks different (CGNAT / double NAT)
+It is normal to see two different IP addresses:
+- Your MacBook has a private IP inside your home network.
+- A website shows your public IP on the internet.
+
+With 5G routers, the router can also be behind the carrier's network (CGNAT). In that case, port forwarding will not work from the internet.
+
+### 1) Find your local IP (private IP)
+```
+ipconfig getifaddr en0
+ipconfig getifaddr en1
+```
+
+### 2) Find your public IP (internet IP)
+```
+curl -4 https://ifconfig.me
+```
+
+### 3) Find your router gateway IP (to log in)
+```
+route -n get default
+```
+Look for the line that says `gateway:`. Open `http://GATEWAY_IP` in your browser and log in to the router. Find the "WAN IP" or "Internet IP".
+
+### 4) Compare the WAN IP to the public IP
+- If they match, you likely have a public IP.
+- If they do not match, or if the WAN IP starts with `10.`, `192.168.`, `172.16-31.`, or `100.64-127.`, you are behind another NAT (CGNAT).
+
+### What to do if you are behind CGNAT
+You cannot reach your MacBook from the internet with normal port forwarding. Use one of these:
+- Ask your carrier for a public IPv4 address (sometimes called a "routable" or "static" IP).
+- Use IPv6 if your carrier provides it and open the correct ports.
+- Use a tunnel service (examples: Tailscale, ZeroTier, Cloudflare Tunnel).
+- Use a small VPS and a reverse SSH tunnel.
+
+If you only need access inside your home network, CGNAT is not a problem.
+
+## Step 7: Install Homebrew (package manager)
 Check if Homebrew is installed:
 
 ```
@@ -95,7 +132,7 @@ If you see "command not found", install it:
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-## Step 7: Install a simple web server (Caddy)
+## Step 8: Install a simple web server (Caddy)
 Caddy is easy for beginners and works well for a home server.
 
 Create a simple site folder and test file:
@@ -140,7 +177,7 @@ Test locally:
 curl http://localhost:8080
 ```
 
-## Step 8: Allow the server through the macOS firewall
+## Step 9: Allow the server through the macOS firewall
 Turn on the firewall (safe to run even if already on):
 
 ```
@@ -155,7 +192,7 @@ sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add "$CADDY_BIN"
 sudo /usr/libexec/ApplicationFirewall/socketfilterfw --unblockapp "$CADDY_BIN"
 ```
 
-## Step 9: Run with the lid closed (clamshell mode)
+## Step 10: Run with the lid closed (clamshell mode)
 MacBooks sleep when the lid is closed unless in clamshell mode.
 
 1. Connect power.
@@ -170,7 +207,7 @@ ssh YOUR_USER@YOUR_MACBOOK_IP
 curl http://YOUR_MACBOOK_IP:8080
 ```
 
-## Step 10: Basic control commands
+## Step 11: Basic control commands
 Restart the web server:
 
 ```
