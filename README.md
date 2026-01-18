@@ -151,6 +151,15 @@ http://TAILSCALE_IP:8080
 #### Option B: Cloudflare Tunnel (free)
 This creates a public URL without port forwarding.
 
+How it works (plain language):
+- `cloudflared` opens an outbound encrypted tunnel from your MacBook to Cloudflare.
+- Cloudflare gives you a public URL and forwards requests through that tunnel.
+- No inbound port forwarding is needed, which is why it works behind CGNAT.
+
+When you can access your server:
+- Quick tunnel: immediately after the command prints a `trycloudflare.com` URL, and only while that Terminal window is running.
+- Stable tunnel: after the DNS route is created and the tunnel is running. DNS updates can take a few minutes to propagate.
+
 Quick temporary tunnel (no account, changes each time):
 ```
 brew install cloudflared
@@ -192,6 +201,27 @@ cloudflared tunnel route dns macbook-server server.example.com
 6. Run the tunnel:
 ```
 cloudflared tunnel run macbook-server
+```
+
+Optional script (stable tunnel):
+Save this as `~/bin/start-cloudflared-tunnel.sh`, then run it when you want the tunnel online.
+```
+mkdir -p ~/bin
+cat > ~/bin/start-cloudflared-tunnel.sh <<'EOF'
+#!/bin/bash
+set -euo pipefail
+
+TUNNEL_NAME="macbook-server"
+LOG_FILE="$HOME/cloudflared.log"
+
+cloudflared tunnel run "$TUNNEL_NAME" --loglevel info --logfile "$LOG_FILE"
+EOF
+
+chmod +x ~/bin/start-cloudflared-tunnel.sh
+```
+Run it:
+```
+~/bin/start-cloudflared-tunnel.sh
 ```
 
 #### Option C: ZeroTier (free tier)
