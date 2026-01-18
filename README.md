@@ -111,13 +111,130 @@ Look for the line that says `gateway:`. Open `http://GATEWAY_IP` in your browser
 - If they do not match, or if the WAN IP starts with `10.`, `192.168.`, `172.16-31.`, or `100.64-127.`, you are behind another NAT (CGNAT).
 
 ### What to do if you are behind CGNAT
-You cannot reach your MacBook from the internet with normal port forwarding. Use one of these:
-- Ask your carrier for a public IPv4 address (sometimes called a "routable" or "static" IP).
-- Use IPv6 if your carrier provides it and open the correct ports.
-- Use a tunnel service (examples: Tailscale, ZeroTier, Cloudflare Tunnel).
-- Use a small VPS and a reverse SSH tunnel.
+You cannot reach your MacBook from the internet with normal port forwarding. Use one of the options below. If you only need access inside your home network, CGNAT is not a problem.
 
-If you only need access inside your home network, CGNAT is not a problem.
+### Free options (no public IP required)
+These work well for home use and are beginner friendly.
+
+#### Option A: Tailscale (free personal plan)
+Tailscale creates a private network between your devices.
+
+On the MacBook (server):
+1. Install Tailscale:
+```
+brew install --cask tailscale
+```
+2. Open the Tailscale app once so macOS can approve it:
+```
+open -a Tailscale
+```
+3. Sign in in the app window, then bring it up in Terminal:
+```
+tailscale up
+```
+4. Get the Tailscale IP:
+```
+tailscale ip -4
+```
+
+On your other device (client):
+1. Install Tailscale and sign in with the same account.
+2. Use the Tailscale IP to connect:
+```
+ssh YOUR_USER@TAILSCALE_IP
+```
+3. Open the web server from that device:
+```
+http://TAILSCALE_IP:8080
+```
+
+#### Option B: Cloudflare Tunnel (free)
+This creates a public URL without port forwarding.
+
+Quick temporary tunnel (no account, changes each time):
+```
+brew install cloudflared
+cloudflared tunnel --url http://localhost:8080
+```
+Cloudflared prints a `trycloudflare.com` URL. Open that URL from anywhere.
+
+Stable tunnel (requires a free Cloudflare account and domain):
+1. Install cloudflared:
+```
+brew install cloudflared
+```
+2. Login and authorize:
+```
+cloudflared tunnel login
+```
+3. Create a named tunnel:
+```
+cloudflared tunnel create macbook-server
+```
+4. Create a config file:
+```
+mkdir -p ~/.cloudflared
+cat > ~/.cloudflared/config.yml <<EOF
+tunnel: macbook-server
+credentials-file: /Users/YOUR_USER/.cloudflared/macbook-server.json
+
+ingress:
+  - hostname: server.example.com
+    service: http://localhost:8080
+  - service: http_status:404
+EOF
+```
+Replace `YOUR_USER` and `server.example.com` with your values.
+5. Route the hostname to the tunnel:
+```
+cloudflared tunnel route dns macbook-server server.example.com
+```
+6. Run the tunnel:
+```
+cloudflared tunnel run macbook-server
+```
+
+#### Option C: ZeroTier (free tier)
+ZeroTier is similar to Tailscale but uses a manual network ID.
+
+On the MacBook:
+1. Install:
+```
+brew install --cask zerotier-one
+```
+2. Join your network (replace with your ID):
+```
+sudo zerotier-cli join YOUR_NETWORK_ID
+```
+3. Approve the MacBook in the ZeroTier web console.
+
+On your other device:
+1. Install ZeroTier and join the same network ID.
+2. Use the assigned ZeroTier IP to connect.
+
+### Paid or advanced options
+Use these if you want a public IP or need a stable public URL.
+
+#### Option D: Ask the carrier for a public IPv4 or static IP
+1. Contact your 5G carrier and request a public IPv4 address.
+2. After they enable it, compare WAN IP and public IP again (Step 6).
+3. Then you can use normal port forwarding on your router.
+
+#### Option E: VPS reverse SSH tunnel
+This uses a small cloud server with a public IP.
+
+1. Rent a small VPS (any provider is fine).
+2. On the VPS, allow SSH and the port you will use (for example 8080).
+3. From the MacBook, create an SSH tunnel:
+```
+ssh -N -R 8080:localhost:8080 YOUR_VPS_USER@YOUR_VPS_IP
+```
+4. Visit `http://YOUR_VPS_IP:8080` from anywhere.
+5. To keep it running after disconnects, install autossh:
+```
+brew install autossh
+autossh -M 0 -N -R 8080:localhost:8080 YOUR_VPS_USER@YOUR_VPS_IP
+```
 
 ## Step 7: Install Homebrew (package manager)
 Check if Homebrew is installed:
