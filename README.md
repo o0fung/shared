@@ -57,6 +57,10 @@ Raspberry Pi Imager can write your `rpi-ubuntu-24.img` file and shows progress
 as it writes and verifies each card. It does not monitor a `dd` run, so use it
 only after you have created the master image in step 3.
 
+If you only have a compressed image (`.img.gz`), decompress it first:
+
+- `gzip -d ~/rpi-ubuntu-24.img.gz`
+
 ## 5) Optional verification (recommended)
 
 This reads the whole card back and compares it to the image:
