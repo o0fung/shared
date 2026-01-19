@@ -51,6 +51,12 @@ Power off the card so it is safe to remove:
 
 Repeat this step for each of your six target cards.
 
+## 4b) Using Raspberry Pi Imager (optional)
+
+Raspberry Pi Imager can write your `rpi-ubuntu-24.img` file and shows progress
+as it writes and verifies each card. It does not monitor a `dd` run, so use it
+only after you have created the master image in step 3.
+
 ## 5) Optional verification (recommended)
 
 This reads the whole card back and compares it to the image:
