@@ -43,14 +43,29 @@ We will strictly avoid custom hardware manufacturing to minimize capital expendi
 *   **Algorithm:** MediaPipe Hands for 21-point hand skeleton tracking.
 *   **Target:** Stroke survivors, Arthritis patients.
 
-## 5. Monetization Strategy
+## 5. Technical Feasibility & FAQs
+
+### Do we need Depth Sensors (LiDAR/Kinect)?
+**No.** While depth sensors provide absolute distance measurements, they are not required for most rehabilitation use cases.
+*   **Why?** MediaPipe is trained to infer 3D coordinates ($x, y, z$) from a single 2D RGB camera. The "Z" coordinate represents relative depth.
+*   **Benefit:** This allows your product to run on billions of existing cheap Android/iOS devices and laptops, rather than just high-end iPad Pros with LiDAR.
+
+### Can we prototype in Python and move to Mobile?
+**Yes.** This is the standard industry workflow.
+*   **Prototyping (Python):** Rapidly test math, angles, and "rehab logic" (e.g., "Is the knee bent at 90 degrees?"). Python is faster to write and debug.
+*   **Production (Mobile):** Once the *math* is proven, you port just the logic to the mobile app.
+    *   **Android:** MediaPipe offers a Java/Kotlin API.
+    *   **iOS:** MediaPipe offers an Objective-C/Swift API.
+    *   **Cross-Platform:** You can use **Flutter** or **React Native** (with some native bridges) or **TensorFlow.js** for web-based mobile apps.
+
+## 6. Monetization Strategy
 *   **B2B (Clinics):** "Provider Dashboard" subscription. Therapists pay to prescribe exercises and view patient data/compliance.
     *   *Price:* $50-100/month per therapist.
 *   **B2C (Direct to Patient):** Freemium model. Basic exercises free; personalized AI coaching and history analytics for a monthly fee.
     *   *Price:* $9.99/month.
 *   **Data Licensing:** Aggregated, anonymized kinematic data is valuable for research and insurance companies.
 
-## 6. Implementation Roadmap
+## 7. Implementation Roadmap
 
 ### Phase 1: Prototype (Weeks 1-4)
 *   **Objective:** Proof of concept for VisionPT.
@@ -66,7 +81,7 @@ We will strictly avoid custom hardware manufacturing to minimize capital expendi
 *   **Objective:** User testing.
 *   **Action:** Deploy to 10 beta testers. Collect feedback on UI/UX and detection accuracy.
 
-## 7. Next Steps for Development
+## 8. Next Steps for Development
 1.  Initialize a Python environment for the Phase 1 prototype.
 2.  Implement a basic "Squat Counter" using MediaPipe.
 3.  Set up a basic web interface to visualize the camera feed and overlay.
