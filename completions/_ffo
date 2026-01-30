@@ -1,0 +1,24 @@
+#compdef ffo
+
+_ffo() {
+  local -a modes
+  modes=(name content git)
+
+  _arguments -S -s \
+    '1:app command:_command_names -e' \
+    "2:mode:(${modes})" \
+    '3:initial pattern:' \
+    '4:directory:_files -/' \
+    '--hidden[include hidden files]' \
+    '--no-ignore[do not respect ignore files]' \
+    '--follow[follow symlinks]' \
+    '(-d --max-depth)'{-d,--max-depth}'[max traversal depth]:depth:' \
+    '--git[force git mode]' \
+    '--no-preview[disable preview pane]' \
+    '--multi[allow multi-select]' \
+    '--prompt[override fzf prompt]:prompt:' \
+    '--help[show help]'
+}
+
+_ffo "$@"
+
