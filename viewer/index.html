@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Interactive synchronized knee exoskeleton gait data viewer"
+    />
+    <title>Synchronized Gait Data Viewer</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@3.7.0/plotly.min.js"></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <div>
+        <p class="eyebrow">Knee exoskeleton recording</p>
+        <h1>Synchronized gait data</h1>
+      </div>
+      <p id="status" role="status">Loading synchronized data…</p>
+    </header>
+
+    <main>
+      <aside aria-label="Plot controls">
+        <section>
+          <h2>FID range</h2>
+          <div class="range-inputs">
+            <label>
+              Start
+              <input id="range-start" type="number" step="1" disabled />
+            </label>
+            <label>
+              End
+              <input id="range-end" type="number" step="1" disabled />
+            </label>
+          </div>
+          <div class="button-row">
+            <button id="apply-range" type="button" disabled>Apply</button>
+            <button id="reset-range" class="secondary" type="button" disabled>
+              Full range
+            </button>
+          </div>
+          <p class="hint">Plot zoom and pan are shared across every subplot.</p>
+        </section>
+
+        <section class="channel-section">
+          <div class="section-heading">
+            <h2>Channels</h2>
+            <span id="selected-count">0 selected</span>
+          </div>
+          <label class="search-label">
+            <span class="visually-hidden">Filter channels</span>
+            <input
+              id="channel-search"
+              type="search"
+              placeholder="Filter channels…"
+              disabled
+            />
+          </label>
+          <div class="button-row">
+            <button id="select-all" class="secondary compact" type="button" disabled>
+              Select all
+            </button>
+            <button id="clear-all" class="secondary compact" type="button" disabled>
+              Clear
+            </button>
+          </div>
+          <div id="channel-list" class="channel-list"></div>
+        </section>
+      </aside>
+
+      <section class="plot-panel" aria-label="Data plots">
+        <div id="empty-state">Select at least one channel to begin.</div>
+        <div id="plot"></div>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        FID 0 is the first detected jump. At 50 Hz, 50 FIDs represent approximately
+        one second.
+      </p>
+    </footer>
+  </body>
+</html>
