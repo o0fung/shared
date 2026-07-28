@@ -18,18 +18,24 @@ const MARKER_CONFIG = {
 };
 const VIEWER_PREFS_STORAGE_KEY = "gait-viewer-prefs";
 const VIEWER_PREFS_SCHEMA_VERSION = 1;
+const MIN_FID_SPAN = 2;
 
 const elements = {
   status: document.querySelector("#status"),
   rangeStart: document.querySelector("#range-start"),
   rangeEnd: document.querySelector("#range-end"),
+  rangeEndSlider: document.querySelector("#range-end-slider"),
+  rangeEndSliderValue: document.querySelector("#range-end-slider-value"),
   applyRange: document.querySelector("#apply-range"),
   resetRange: document.querySelector("#reset-range"),
+  restoreRange: document.querySelector("#restore-range"),
   channelSearch: document.querySelector("#channel-search"),
   channelList: document.querySelector("#channel-list"),
   selectedCount: document.querySelector("#selected-count"),
   selectAll: document.querySelector("#select-all"),
   clearAll: document.querySelector("#clear-all"),
+  applyChannels: document.querySelector("#apply-channels"),
+  restoreChannels: document.querySelector("#restore-channels"),
   emptyState: document.querySelector("#empty-state"),
   plot: document.querySelector("#plot"),
 };
@@ -39,9 +45,14 @@ const state = {
   channels: [],
   selectedChannels: new Set(),
   fullRange: [0, 0],
+  persistedRange: null,
+  persistedChannels: new Set(),
   markers: {
     blue: null,
     red: null,
+  },
+  interaction: {
+    horizontalWheelInstalled: false,
   },
 };
 
@@ -73,12 +84,12 @@ function findNearestRow(rows, targetFid) {
   return nearest;
 }
 
-function normalizeMarkerFid(rawFid, visibleRows, range) {
-  if (!Number.isFinite(rawFid) || visibleRows.length === 0) {
+function normalizeMarkerFid(rawFid, dataRows, range) {
+  if (!Number.isFinite(rawFid) || dataRows.length === 0) {
     return null;
   }
   const clampedFid = clamp(rawFid, range[0], range[1]);
-  return findNearestRow(visibleRows, clampedFid)?.fid ?? null;
+  return findNearestRow(dataRows, clampedFid)?.fid ?? null;
 }
 
 function formatMagnitude(value) {
@@ -89,7 +100,7 @@ function formatMarkerTime(fid) {
   return `${(fid / 50).toFixed(2)}s`;
 }
 
-function buildMarkerOverlay(selectedChannels, subplotMeta, visibleRows) {
+function buildMarkerOverlay(selectedChannels, subplotMeta, dataRows) {
   // Marker rendering flow:
   // 1) Resolve blue/red marker FIDs to concrete visible rows.
   // 2) Draw full-height shared-x lines.
@@ -100,7 +111,7 @@ function buildMarkerOverlay(selectedChannels, subplotMeta, visibleRows) {
       if (!Number.isFinite(markerFid)) {
         return null;
       }
-      const row = findNearestRow(visibleRows, markerFid);
+      const row = findNearestRow(dataRows, markerFid);
       if (!row) {
         return null;
       }
@@ -174,6 +185,14 @@ function buildMarkerOverlay(selectedChannels, subplotMeta, visibleRows) {
 }
 
 function fidFromContextMenu(event) {
+  const pointer = plotPointerFromEvent(event);
+  if (!pointer) {
+    return null;
+  }
+  return pointer.fid;
+}
+
+function plotPointerFromEvent(event) {
   const fullLayout = elements.plot._fullLayout;
   const xAxis = fullLayout?.xaxis;
   const size = fullLayout?._size;
@@ -205,7 +224,34 @@ function fidFromContextMenu(event) {
   }
 
   const fraction = relativeX / size.w;
-  return axisStart + (axisEnd - axisStart) * fraction;
+  return {
+    fid: axisStart + (axisEnd - axisStart) * fraction,
+    relativeX,
+  };
+}
+
+function activeRangeOrFullRange() {
+  try {
+    return selectedRange();
+  } catch {
+    return [...state.fullRange];
+  }
+}
+
+function rangeEndFromDrag(startRange, deltaX, plotWidth) {
+  const [fullStart, fullEnd] = state.fullRange;
+  const [rangeStart, rangeEnd] = startRange;
+  if (!Number.isFinite(plotWidth) || plotWidth <= 0) {
+    return startRange;
+  }
+
+  const fidPerPixel = (rangeEnd - rangeStart) / plotWidth;
+  const nextEnd = clamp(
+    rangeEnd - deltaX * fidPerPixel,
+    Math.max(fullStart, rangeStart) + MIN_FID_SPAN,
+    fullEnd,
+  );
+  return [rangeStart, Math.round(nextEnd)];
 }
 
 function parseCsv(text) {
@@ -270,7 +316,6 @@ function renderChannelList() {
         state.selectedChannels.delete(channel);
       }
       updateSelectedCount();
-      saveViewerPreferences();
       renderPlot();
     });
 
@@ -298,15 +343,96 @@ function selectedRange() {
   ];
 }
 
-function saveViewerPreferences() {
+function syncEndRangeSlider() {
+  const [fullStart, fullEnd] = state.fullRange;
+  const requestedStart = Number(elements.rangeStart.value);
+  const requestedEnd = Number(elements.rangeEnd.value);
+  if (
+    !Number.isFinite(fullStart) ||
+    !Number.isFinite(fullEnd) ||
+    !Number.isFinite(requestedStart) ||
+    !Number.isFinite(requestedEnd)
+  ) {
+    return;
+  }
+
+  const min = clamp(Math.round(requestedStart) + 1, fullStart, fullEnd);
+  const value = clamp(Math.round(requestedEnd), min, fullEnd);
+  elements.rangeEndSlider.min = min;
+  elements.rangeEndSlider.max = fullEnd;
+  elements.rangeEndSlider.value = value;
+  elements.rangeEndSliderValue.value = value;
+}
+
+function rangeFromRelayout(event) {
+  const range = Array.isArray(event["xaxis.range"])
+    ? event["xaxis.range"]
+    : [event["xaxis.range[0]"], event["xaxis.range[1]"]];
+  const [start, end] = range.map(Number);
+  return Number.isFinite(start) && Number.isFinite(end) && start < end
+    ? [start, end]
+    : null;
+}
+
+function installHorizontalWheelControl() {
+  if (state.interaction.horizontalWheelInstalled) {
+    return;
+  }
+  state.interaction.horizontalWheelInstalled = true;
+  document.addEventListener(
+    "wheel",
+    (event) => {
+      if (
+        !elements.plot.contains(event.target) ||
+        Math.abs(event.deltaX) <= Math.abs(event.deltaY)
+      ) {
+        return;
+      }
+
+      // Horizontal trackpad input is emitted as wheel events. Intercept it
+      // before Plotly's wheel handler so Start stays fixed and only End moves.
+      event.preventDefault();
+      event.stopPropagation();
+      const currentRange = activeRangeOrFullRange();
+      const plotWidth = elements.plot._fullLayout?._size?.w;
+      const [rangeStart, rangeEnd] = rangeEndFromDrag(
+        currentRange,
+        event.deltaX,
+        plotWidth,
+      );
+      if (
+        Number(elements.rangeStart.value) === rangeStart &&
+        Number(elements.rangeEnd.value) === rangeEnd
+      ) {
+        return;
+      }
+
+      elements.rangeStart.value = rangeStart;
+      elements.rangeEnd.value = rangeEnd;
+      renderPlot();
+    },
+    { capture: true, passive: false },
+  );
+}
+
+function applyViewport(range) {
+  return Plotly.relayout(elements.plot, {
+    "xaxis.autorange": false,
+    "xaxis.range": range,
+  });
+}
+
+function saveViewerPreferences({
+  range = state.persistedRange ?? activeRangeOrFullRange(),
+  channels = state.persistedChannels,
+} = {}) {
   try {
     const [fullStart, fullEnd] = state.fullRange;
     if (!Number.isFinite(fullStart) || !Number.isFinite(fullEnd)) {
       return;
     }
 
-    let rangeStart = Number(elements.rangeStart.value);
-    let rangeEnd = Number(elements.rangeEnd.value);
+    let [rangeStart, rangeEnd] = range;
     if (!Number.isFinite(rangeStart) || !Number.isFinite(rangeEnd)) {
       rangeStart = fullStart;
       rangeEnd = fullEnd;
@@ -318,7 +444,7 @@ function saveViewerPreferences() {
       rangeEnd = fullEnd;
     }
 
-    const selectedChannels = [...state.selectedChannels].filter((channel) =>
+    const selectedChannels = [...channels].filter((channel) =>
       state.channels.includes(channel),
     );
     const payload = {
@@ -328,6 +454,8 @@ function saveViewerPreferences() {
       selectedChannels,
     };
     localStorage.setItem(VIEWER_PREFS_STORAGE_KEY, JSON.stringify(payload));
+    state.persistedRange = [rangeStart, rangeEnd];
+    state.persistedChannels = new Set(selectedChannels);
   } catch {
     // Persistence is best-effort: rendering and interaction should continue.
   }
@@ -376,6 +504,39 @@ function loadViewerPreferences() {
   }
 }
 
+function restorePersistedRange() {
+  if (!state.persistedRange) {
+    elements.status.classList.add("error");
+    elements.status.textContent = "No persisted range found yet.";
+    return;
+  }
+
+  elements.status.classList.remove("error");
+  const persistedRange = [...state.persistedRange];
+  [elements.rangeStart.value, elements.rangeEnd.value] = persistedRange;
+
+  // Plotly can retain a panned axis through react(), so reset the primary
+  // matched x-axis explicitly after that render has finished.
+  Promise.resolve(renderPlot()).then(() => applyViewport(persistedRange));
+}
+
+function restorePersistedChannels() {
+  if (state.persistedChannels.size === 0) {
+    elements.status.classList.add("error");
+    elements.status.textContent = "No persisted channel selection found yet.";
+    return;
+  }
+
+  // Reset flow keeps temporary exploration reversible:
+  // 1) hydrate persisted channels
+  // 2) refresh checkbox UI
+  // 3) re-render plot using current range inputs
+  elements.status.classList.remove("error");
+  state.selectedChannels = new Set(state.persistedChannels);
+  renderChannelList();
+  renderPlot();
+}
+
 function showRangeError(message) {
   elements.status.textContent = message;
   elements.status.classList.add("error");
@@ -399,12 +560,13 @@ function renderPlot() {
     showRangeError(error.message);
     return;
   }
+  syncEndRangeSlider();
 
   elements.status.classList.remove("error");
   elements.status.textContent = `${state.rows.length.toLocaleString()} samples · ${selected.length} subplot${selected.length === 1 ? "" : "s"}`;
-  const visibleRows = state.rows.filter(
-    (row) => row.fid >= range[0] && row.fid <= range[1],
-  );
+  // Keep the full recording in every trace. The selected Start/End values
+  // configure only the x-axis viewport, so later pan/zoom can reveal any FID.
+  const dataRows = state.rows;
 
   // Give every trace its own y-axis domain while matching all x-axes to the
   // first one. The final subplot alone renders x tick labels, producing stacked
@@ -455,8 +617,8 @@ function renderPlot() {
       type: "scattergl",
       mode: "lines",
       name: channelLabel(channel),
-      x: visibleRows.map((row) => row.fid),
-      y: visibleRows.map((row) => row[channel]),
+      x: dataRows.map((row) => row.fid),
+      y: dataRows.map((row) => row[channel]),
       xaxis: `x${axisSuffix}`,
       yaxis: `y${axisSuffix}`,
       connectgaps: false,
@@ -464,31 +626,34 @@ function renderPlot() {
       hovertemplate: "%{y:.4f}<extra></extra>",
     };
   });
-  const markerOverlay = buildMarkerOverlay(selected, subplotMeta, visibleRows);
+  const markerOverlay = buildMarkerOverlay(selected, subplotMeta, dataRows);
   layout.shapes = markerOverlay.shapes;
   layout.annotations = markerOverlay.annotations;
 
-  Plotly.react(elements.plot, traces, layout, {
+  const plotUpdate = Plotly.react(elements.plot, traces, layout, {
     responsive: true,
     displaylogo: false,
     scrollZoom: true,
     modeBarButtonsToRemove: ["lasso2d", "select2d"],
   });
+  installHorizontalWheelControl();
 
   elements.plot.removeAllListeners?.("plotly_relayout");
   elements.plot.removeAllListeners?.("plotly_click");
   elements.plot.on("plotly_relayout", (event) => {
-    const start = event["xaxis.range[0]"];
-    const end = event["xaxis.range[1]"];
-    if (Number.isFinite(start) && Number.isFinite(end)) {
+    // Plotly may report a relayout range as indexed keys or an array. Mirror
+    // either form in the inputs, but leave persistence to Range Apply.
+    const relayoutRange = rangeFromRelayout(event);
+    if (relayoutRange) {
+      const [start, end] = relayoutRange;
       elements.rangeStart.value = Math.round(start);
       elements.rangeEnd.value = Math.round(end);
-      saveViewerPreferences();
+      syncEndRangeSlider();
     }
   });
   elements.plot.on("plotly_click", (event) => {
     const clickedFid = event?.points?.[0]?.x;
-    const markerFid = normalizeMarkerFid(clickedFid, visibleRows, range);
+    const markerFid = normalizeMarkerFid(clickedFid, dataRows, range);
     if (!Number.isFinite(markerFid)) {
       return;
     }
@@ -497,7 +662,7 @@ function renderPlot() {
   });
   elements.plot.oncontextmenu = (event) => {
     const clickedFid = fidFromContextMenu(event);
-    const markerFid = normalizeMarkerFid(clickedFid, visibleRows, range);
+    const markerFid = normalizeMarkerFid(clickedFid, dataRows, range);
     if (!Number.isFinite(markerFid)) {
       return;
     }
@@ -505,17 +670,23 @@ function renderPlot() {
     state.markers.red = markerFid;
     renderPlot();
   };
+
+  return plotUpdate;
 }
 
 function enableControls() {
   for (const control of [
     elements.rangeStart,
     elements.rangeEnd,
+    elements.rangeEndSlider,
     elements.applyRange,
     elements.resetRange,
+    elements.restoreRange,
     elements.channelSearch,
     elements.selectAll,
     elements.clearAll,
+    elements.applyChannels,
+    elements.restoreChannels,
   ]) {
     control.disabled = false;
   }
@@ -535,6 +706,7 @@ async function loadData() {
     state.selectedChannels = restoredPreferences
       ? new Set(restoredPreferences.selectedChannels)
       : defaultSelectedChannels();
+    state.persistedChannels = new Set(state.selectedChannels);
 
     elements.rangeStart.min = state.fullRange[0];
     elements.rangeStart.max = state.fullRange[1];
@@ -546,9 +718,14 @@ async function loadData() {
     elements.rangeEnd.value = restoredPreferences
       ? restoredPreferences.rangeEnd
       : state.fullRange[1];
+    state.persistedRange = [
+      Number(elements.rangeStart.value),
+      Number(elements.rangeEnd.value),
+    ];
     enableControls();
     renderChannelList();
     renderPlot();
+    saveViewerPreferences();
   } catch (error) {
     elements.status.textContent = `Unable to load viewer: ${error.message}`;
     elements.status.classList.add("error");
@@ -557,12 +734,23 @@ async function loadData() {
 
 elements.applyRange.addEventListener("click", () => {
   renderPlot();
-  saveViewerPreferences();
+  saveViewerPreferences({ range: activeRangeOrFullRange() });
 });
 elements.resetRange.addEventListener("click", () => {
   [elements.rangeStart.value, elements.rangeEnd.value] = state.fullRange;
   renderPlot();
-  saveViewerPreferences();
+});
+elements.restoreRange.addEventListener("click", restorePersistedRange);
+elements.rangeStart.addEventListener("input", syncEndRangeSlider);
+elements.rangeEnd.addEventListener("input", syncEndRangeSlider);
+elements.rangeEndSlider.addEventListener("input", () => {
+  elements.rangeEnd.value = elements.rangeEndSlider.value;
+  elements.rangeEndSliderValue.value = elements.rangeEndSlider.value;
+});
+elements.rangeEndSlider.addEventListener("change", () => {
+  // Input previews the chosen endpoint; change fires when a drag is released
+  // (or a keyboard adjustment is committed), which is when the plot updates.
+  renderPlot();
 });
 elements.channelSearch.addEventListener("input", renderChannelList);
 elements.selectAll.addEventListener("click", () => {
@@ -571,13 +759,15 @@ elements.selectAll.addEventListener("click", () => {
   }
   renderChannelList();
   renderPlot();
-  saveViewerPreferences();
 });
 elements.clearAll.addEventListener("click", () => {
   state.selectedChannels.clear();
   renderChannelList();
   renderPlot();
-  saveViewerPreferences();
 });
+elements.applyChannels.addEventListener("click", () => {
+  saveViewerPreferences({ channels: state.selectedChannels });
+});
+elements.restoreChannels.addEventListener("click", restorePersistedChannels);
 
 loadData();

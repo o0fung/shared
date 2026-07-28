@@ -35,13 +35,32 @@
               <input id="range-end" type="number" step="1" disabled />
             </label>
           </div>
+          <div class="end-slider-control">
+            <div class="slider-heading">
+              <label for="range-end-slider">End slider</label>
+              <output id="range-end-slider-value" for="range-end-slider">—</output>
+            </div>
+            <input
+              id="range-end-slider"
+              type="range"
+              step="1"
+              aria-describedby="range-slider-hint"
+              disabled
+            />
+          </div>
           <div class="button-row">
             <button id="apply-range" type="button" disabled>Apply</button>
             <button id="reset-range" class="secondary" type="button" disabled>
               Full range
             </button>
+            <button id="restore-range" class="secondary" type="button" disabled>
+              Reset
+            </button>
           </div>
-          <p class="hint">Plot zoom and pan are shared across every subplot.</p>
+          <p id="range-slider-hint" class="hint">
+            Release the End slider to update the plot. Plot zoom and pan are shared
+            across every subplot.
+          </p>
         </section>
 
         <section class="channel-section">
@@ -64,6 +83,12 @@
             </button>
             <button id="clear-all" class="secondary compact" type="button" disabled>
               Clear
+            </button>
+            <button id="apply-channels" class="compact" type="button" disabled>
+              Apply
+            </button>
+            <button id="restore-channels" class="secondary compact" type="button" disabled>
+              Reset
             </button>
           </div>
           <div id="channel-list" class="channel-list"></div>

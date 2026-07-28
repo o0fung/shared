@@ -24,8 +24,12 @@
 
 body {
   min-width: 320px;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
   margin: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
   color: var(--text);
   background:
     radial-gradient(circle at 80% -20%, #153a50 0, transparent 38rem),
@@ -94,7 +98,7 @@ main {
   display: grid;
   grid-template-columns: 300px minmax(0, 1fr);
   gap: 18px;
-  align-items: start;
+  min-height: 0;
 }
 
 aside,
@@ -106,9 +110,8 @@ aside,
 }
 
 aside {
-  position: sticky;
-  top: 18px;
-  overflow: hidden;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 aside section {
@@ -119,9 +122,15 @@ aside section + section {
   border-top: 1px solid var(--border);
 }
 
+/* The sidebar is the scroll boundary when its controls exceed the workspace. */
+.channel-section {
+  min-height: 130px;
+}
+
 .range-inputs,
 .button-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 9px;
 }
 
@@ -133,6 +142,30 @@ aside section + section {
   min-width: 0;
   color: var(--muted);
   font-size: 0.76rem;
+}
+
+.end-slider-control {
+  margin: 0 0 12px;
+}
+
+.slider-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.slider-heading output {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+input[type="range"] {
+  margin: 8px 0 0;
+  padding: 0;
+  accent-color: var(--accent);
 }
 
 input,
@@ -174,6 +207,17 @@ button.compact {
   font-size: 0.78rem;
 }
 
+.channel-section .button-row {
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.channel-section .button-row button {
+  flex: 1 1 0;
+  padding-inline: 6px;
+  white-space: nowrap;
+}
+
 button:disabled,
 input:disabled {
   cursor: not-allowed;
@@ -207,7 +251,7 @@ input:disabled {
 }
 
 .channel-list {
-  max-height: calc(100vh - 385px);
+  max-height: 250px;
   min-height: 130px;
   margin-top: 10px;
   overflow-y: auto;
@@ -236,8 +280,8 @@ input:disabled {
 }
 
 .plot-panel {
-  min-height: 560px;
-  overflow: hidden;
+  min-height: 0;
+  overflow: auto;
 }
 
 #plot {
@@ -246,7 +290,7 @@ input:disabled {
 
 #empty-state {
   display: grid;
-  min-height: 560px;
+  min-height: 100%;
   place-items: center;
   color: var(--muted);
 }
@@ -269,6 +313,13 @@ footer {
 }
 
 @media (max-width: 820px) {
+  body {
+    height: auto;
+    min-height: 100vh;
+    display: block;
+    overflow-y: auto;
+  }
+
   header {
     display: block;
   }
@@ -283,10 +334,19 @@ footer {
   }
 
   aside {
-    position: static;
+    display: block;
   }
 
   .channel-list {
+    min-height: 130px;
     max-height: 250px;
+  }
+
+  .plot-panel {
+    min-height: 560px;
+  }
+
+  #empty-state {
+    min-height: 560px;
   }
 }
