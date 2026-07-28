@@ -238,6 +238,8 @@ input:disabled {
 .inversion-option {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  width: 100%;
   gap: 8px;
   color: #c9d5e5;
   font-size: 0.8rem;
@@ -245,6 +247,8 @@ input:disabled {
 }
 
 .inversion-option input {
+  order: 1;
+  flex: none;
   width: auto;
   margin: 0;
   accent-color: var(--accent-dark);

@@ -334,6 +334,31 @@ function channelLabel(channel) {
     .replaceAll("_", " ");
 }
 
+function pairedChannelKey(channel) {
+  return channel
+    .replace(/^(?:master_right|slave_left)_/, "walk_")
+    .replace(/^knr_(?:right|left)_/, "knr_");
+}
+
+function colorsForSelectedChannels(channels) {
+  // Allocation flow:
+  // 1) Visit channels in the order they were selected.
+  // 2) Give each previously unseen left/right measurement pair the next color.
+  // 3) Reuse that color for its counterpart.
+  // Colors repeat only after every palette color has been assigned, avoiding
+  // collisions between earlier, distinct measurements.
+  const colorsByPairKey = new Map();
+  const colorsByChannel = new Map();
+  for (const channel of channels) {
+    const key = pairedChannelKey(channel);
+    if (!colorsByPairKey.has(key)) {
+      colorsByPairKey.set(key, COLORS[colorsByPairKey.size % COLORS.length]);
+    }
+    colorsByChannel.set(channel, colorsByPairKey.get(key));
+  }
+  return colorsByChannel;
+}
+
 function filteredChannels() {
   const query = elements.channelSearch.value.trim().toLowerCase();
   return state.channels.filter(
@@ -667,6 +692,7 @@ function renderPlot() {
   // independent scales with synchronized zoom, pan, and hover positioning.
   const plotHeight = plotHeightFor(selected.length);
   state.plotHeight = plotHeight;
+  const colorsByChannel = colorsForSelectedChannels(state.selectedChannels);
   const layout = {
     paper_bgcolor: "#111827",
     plot_bgcolor: "#111827",
@@ -718,7 +744,7 @@ function renderPlot() {
       xaxis: `x${axisSuffix}`,
       yaxis: `y${axisSuffix}`,
       connectgaps: false,
-      line: { color: COLORS[index % COLORS.length], width: 1.35 },
+      line: { color: colorsByChannel.get(channel), width: 1.35 },
       hovertemplate: "%{y:.4f}<extra></extra>",
     };
   });
