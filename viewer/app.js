@@ -359,6 +359,52 @@ function colorsForSelectedChannels(channels) {
   return colorsByChannel;
 }
 
+function pairedYAxisRanges(channels, dataRows) {
+  // Range flow:
+  // 1) Group only selected left/right counterparts by measurement key.
+  // 2) Find the visible-value minimum and maximum across each complete pair.
+  // 3) Apply the same padded, explicit range to both pair subplots.
+  // This avoids Plotly retaining a broad interaction-derived autorange while
+  // retaining independent autoranging for channels without a counterpart.
+  const channelsByPairKey = new Map();
+  for (const channel of channels) {
+    const key = pairedChannelKey(channel);
+    const pairedChannels = channelsByPairKey.get(key) ?? [];
+    pairedChannels.push(channel);
+    channelsByPairKey.set(key, pairedChannels);
+  }
+
+  const rangesByChannel = new Map();
+  for (const pairedChannels of channelsByPairKey.values()) {
+    if (pairedChannels.length < 2) {
+      continue;
+    }
+
+    let minimum = Infinity;
+    let maximum = -Infinity;
+    for (const channel of pairedChannels) {
+      for (const row of dataRows) {
+        const value = displayedChannelValue(row, channel);
+        if (Number.isFinite(value)) {
+          minimum = Math.min(minimum, value);
+          maximum = Math.max(maximum, value);
+        }
+      }
+    }
+    if (!Number.isFinite(minimum) || !Number.isFinite(maximum)) {
+      continue;
+    }
+
+    const span = maximum - minimum;
+    const padding = span > 0 ? span * 0.05 : Math.max(Math.abs(minimum) * 0.05, 0.5);
+    const range = [minimum - padding, maximum + padding];
+    for (const channel of pairedChannels) {
+      rangesByChannel.set(channel, range);
+    }
+  }
+  return rangesByChannel;
+}
+
 function filteredChannels() {
   const query = elements.channelSearch.value.trim().toLowerCase();
   return state.channels.filter(
@@ -693,6 +739,7 @@ function renderPlot() {
   const plotHeight = plotHeightFor(selected.length);
   state.plotHeight = plotHeight;
   const colorsByChannel = colorsForSelectedChannels(state.selectedChannels);
+  const yAxisRanges = pairedYAxisRanges(selected, dataRows);
   const layout = {
     paper_bgcolor: "#111827",
     plot_bgcolor: "#111827",
@@ -712,6 +759,8 @@ function renderPlot() {
     const domainBottom = 1 - (index + 1) * cellHeight + 0.035;
     const xAxisName = `xaxis${axisSuffix}`;
     const yAxisName = `yaxis${axisSuffix}`;
+    const yAxisReference = `y${axisSuffix}`;
+    const yAxisRange = yAxisRanges.get(channel);
 
     layout[xAxisName] = {
       anchor: `y${axisSuffix}`,
@@ -725,12 +774,13 @@ function renderPlot() {
     layout[yAxisName] = {
       anchor: `x${axisSuffix}`,
       domain: [Math.max(0, domainBottom), domainTop],
+      ...(yAxisRange ? { autorange: false, range: yAxisRange } : {}),
       gridcolor: "#263348",
       zerolinecolor: "#3b4d68",
       automargin: true,
     };
     subplotMeta.push({
-      yAxisRef: `y${axisSuffix}`,
+      yAxisRef: yAxisReference,
       domainTop,
       domainHeight: domainTop - Math.max(0, domainBottom),
     });
@@ -742,7 +792,7 @@ function renderPlot() {
       x: dataRows.map((row) => row.fid),
       y: dataRows.map((row) => displayedChannelValue(row, channel)),
       xaxis: `x${axisSuffix}`,
-      yaxis: `y${axisSuffix}`,
+      yaxis: yAxisReference,
       connectgaps: false,
       line: { color: colorsByChannel.get(channel), width: 1.35 },
       hovertemplate: "%{y:.4f}<extra></extra>",
