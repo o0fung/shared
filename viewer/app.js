@@ -746,6 +746,7 @@ function renderPlot() {
     font: { color: "#c9d5e5", size: 11 },
     height: plotHeight,
     margin: { l: 55, r: 24, t: 28, b: 55 },
+    dragmode: "pan",
     hovermode: "x unified",
     showlegend: false,
     uirevision: `${range[0]}:${range[1]}:${selected.join("|")}:${state.invertedSides.right}:${state.invertedSides.left}`,
