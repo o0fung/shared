@@ -7,7 +7,6 @@ on:
     paths:
       - ".github/workflows/deploy-viewer.yml"
       - "viewer/**"
-      - "synchronized_walk.csv"
   workflow_dispatch:
 
 permissions:
@@ -35,7 +34,7 @@ jobs:
         run: |
           mkdir -p _site/data
           cp viewer/index.html viewer/app.js viewer/styles.css _site/
-          cp synchronized_walk.csv _site/data/
+          cp viewer/data/synchronized_walk.csv _site/data/
           touch _site/.nojekyll
 
       - name: Configure GitHub Pages
