@@ -107,11 +107,12 @@ function formatMarkerTime(fid) {
 }
 
 function buildMarkerOverlay(selectedChannels, subplotMeta, dataRows) {
-  // Marker rendering flow:
+  // Right-side annotation flow:
   // 1) Resolve blue/red marker FIDs to concrete visible rows.
-  // 2) Draw full-height shared-x lines.
-  // 3) For each subplot, print right-edge magnitude labels with FID/time context.
-  // This keeps marker visuals synchronized with zoomed ranges and channel sets.
+  // 2) Draw full-height shared-x lines for active markers.
+  // 3) For every subplot, stack its y label, then blue and red values at the
+  //    far right. The y label is independent of marker state.
+  // This keeps the per-channel annotation order stable while markers change.
   const markerRows = Object.entries(state.markers)
     .map(([key, markerFid]) => {
       if (!Number.isFinite(markerFid)) {
@@ -124,10 +125,6 @@ function buildMarkerOverlay(selectedChannels, subplotMeta, dataRows) {
       return { key, markerFid: row.fid, row };
     })
     .filter(Boolean);
-
-  if (markerRows.length === 0) {
-    return { shapes: [], annotations: [] };
-  }
 
   const shapes = markerRows.map((marker) => ({
     type: "line",
@@ -147,14 +144,34 @@ function buildMarkerOverlay(selectedChannels, subplotMeta, dataRows) {
   const rightEdgeAnnotations = [];
   const markerOrder = ["blue", "red"];
   const markerSlotOffset = {
-    blue: 0,
-    red: 1,
+    blue: 1,
+    red: 2,
   };
   subplotMeta.forEach((subplot, index) => {
     const channel = selectedChannels[index];
     if (!channel) {
       return;
     }
+
+    rightEdgeAnnotations.push({
+      xref: "paper",
+      yref: "paper",
+      x: 1.01,
+      y: subplot.domainTop,
+      xanchor: "left",
+      yanchor: "top",
+      showarrow: false,
+      yshift: -2,
+      text: channelLabel(channel),
+      font: {
+        size: 11,
+        color: "#c9d5e5",
+      },
+      bgcolor: "rgba(10,15,29,0.92)",
+      bordercolor: "#c9d5e5",
+      borderwidth: 1,
+      borderpad: 2,
+    });
 
     markerOrder.forEach((markerKey) => {
       const marker = markerRows.find((entry) => entry.key === markerKey);
@@ -168,9 +185,9 @@ function buildMarkerOverlay(selectedChannels, subplotMeta, dataRows) {
       rightEdgeAnnotations.push({
         xref: "paper",
         yref: "paper",
-        x: 0.995,
+        x: 1.01,
         y: subplot.domainTop - markerSlotOffset[marker.key] * 0.038,
-        xanchor: "right",
+        xanchor: "left",
         yanchor: "top",
         showarrow: false,
         yshift: -2,
@@ -617,7 +634,7 @@ function renderPlot() {
     plot_bgcolor: "#111827",
     font: { color: "#c9d5e5", size: 11 },
     height: plotHeight,
-    margin: { l: 130, r: 30, t: 28, b: 55 },
+    margin: { l: 55, r: 320, t: 28, b: 55 },
     hovermode: "x unified",
     showlegend: false,
     uirevision: `${range[0]}:${range[1]}:${selected.join("|")}`,
@@ -644,7 +661,6 @@ function renderPlot() {
     layout[yAxisName] = {
       anchor: `x${axisSuffix}`,
       domain: [Math.max(0, domainBottom), domainTop],
-      title: { text: channelLabel(channel), standoff: 12 },
       gridcolor: "#263348",
       zerolinecolor: "#3b4d68",
       automargin: true,
