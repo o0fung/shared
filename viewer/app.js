@@ -19,6 +19,9 @@ const MARKER_CONFIG = {
 const VIEWER_PREFS_STORAGE_KEY = "gait-viewer-prefs";
 const VIEWER_PREFS_SCHEMA_VERSION = 1;
 const MIN_FID_SPAN = 2;
+const COMPACT_SUBPLOT_HEIGHT = 110;
+const MOBILE_LAYOUT_MAX_WIDTH = 820;
+const MOBILE_PLOT_MIN_HEIGHT = 560;
 
 const elements = {
   status: document.querySelector("#status"),
@@ -37,6 +40,7 @@ const elements = {
   applyChannels: document.querySelector("#apply-channels"),
   restoreChannels: document.querySelector("#restore-channels"),
   emptyState: document.querySelector("#empty-state"),
+  plotPanel: document.querySelector(".plot-panel"),
   plot: document.querySelector("#plot"),
 };
 
@@ -54,6 +58,8 @@ const state = {
   interaction: {
     horizontalWheelInstalled: false,
   },
+  plotHeight: null,
+  plotResizeFrame: null,
 };
 
 function defaultSelectedChannels() {
@@ -542,6 +548,38 @@ function showRangeError(message) {
   elements.status.classList.add("error");
 }
 
+function plotHeightFor(selectedCount) {
+  const compactHeight = selectedCount * COMPACT_SUBPLOT_HEIGHT;
+  if (window.innerWidth <= MOBILE_LAYOUT_MAX_WIDTH) {
+    return Math.max(MOBILE_PLOT_MIN_HEIGHT, compactHeight);
+  }
+  return Math.max(elements.plotPanel.clientHeight, compactHeight);
+}
+
+function schedulePlotHeightUpdate() {
+  if (state.plotResizeFrame !== null) {
+    return;
+  }
+
+  // Resize flow:
+  // 1) Wait until the panel has its new CSS dimensions.
+  // 2) Recalculate only the Plotly height, preserving axes and interactions.
+  // 3) Skip relayout when the compact height has not changed.
+  state.plotResizeFrame = requestAnimationFrame(() => {
+    state.plotResizeFrame = null;
+    if (state.selectedChannels.size === 0) {
+      return;
+    }
+
+    const plotHeight = plotHeightFor(state.selectedChannels.size);
+    if (plotHeight === state.plotHeight) {
+      return;
+    }
+    state.plotHeight = plotHeight;
+    Plotly.relayout(elements.plot, { height: plotHeight });
+  });
+}
+
 function renderPlot() {
   const selected = state.channels.filter((channel) =>
     state.selectedChannels.has(channel),
@@ -549,6 +587,7 @@ function renderPlot() {
   elements.emptyState.hidden = selected.length > 0;
   elements.plot.hidden = selected.length === 0;
   if (selected.length === 0) {
+    state.plotHeight = null;
     Plotly.purge(elements.plot);
     return;
   }
@@ -571,11 +610,13 @@ function renderPlot() {
   // Give every trace its own y-axis domain while matching all x-axes to the
   // first one. The final subplot alone renders x tick labels, producing stacked
   // independent scales with synchronized zoom, pan, and hover positioning.
+  const plotHeight = plotHeightFor(selected.length);
+  state.plotHeight = plotHeight;
   const layout = {
     paper_bgcolor: "#111827",
     plot_bgcolor: "#111827",
     font: { color: "#c9d5e5", size: 11 },
-    height: Math.max(560, selected.length * 190),
+    height: plotHeight,
     margin: { l: 130, r: 30, t: 28, b: 55 },
     hovermode: "x unified",
     showlegend: false,
@@ -636,6 +677,7 @@ function renderPlot() {
     scrollZoom: true,
     modeBarButtonsToRemove: ["lasso2d", "select2d"],
   });
+  schedulePlotHeightUpdate();
   installHorizontalWheelControl();
 
   elements.plot.removeAllListeners?.("plotly_relayout");
@@ -769,5 +811,7 @@ elements.applyChannels.addEventListener("click", () => {
   saveViewerPreferences({ channels: state.selectedChannels });
 });
 elements.restoreChannels.addEventListener("click", restorePersistedChannels);
+window.addEventListener("resize", schedulePlotHeightUpdate);
+new ResizeObserver(schedulePlotHeightUpdate).observe(elements.plotPanel);
 
 loadData();
