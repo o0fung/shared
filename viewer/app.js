@@ -16,8 +16,12 @@ const MARKER_CONFIG = {
   blue: { color: "#60a5fa", label: "Blue" },
   red: { color: "#ef4444", label: "Red" },
 };
+const CHANNEL_SIDE_PREFIXES = {
+  right: "master_right_",
+  left: "slave_left_",
+};
 const VIEWER_PREFS_STORAGE_KEY = "gait-viewer-prefs";
-const VIEWER_PREFS_SCHEMA_VERSION = 1;
+const VIEWER_PREFS_SCHEMA_VERSION = 2;
 const MIN_FID_SPAN = 2;
 const COMPACT_SUBPLOT_HEIGHT = 110;
 const MOBILE_LAYOUT_MAX_WIDTH = 820;
@@ -32,6 +36,8 @@ const elements = {
   applyRange: document.querySelector("#apply-range"),
   resetRange: document.querySelector("#reset-range"),
   restoreRange: document.querySelector("#restore-range"),
+  invertRight: document.querySelector("#invert-right"),
+  invertLeft: document.querySelector("#invert-left"),
   channelSearch: document.querySelector("#channel-search"),
   channelList: document.querySelector("#channel-list"),
   selectedCount: document.querySelector("#selected-count"),
@@ -51,6 +57,10 @@ const state = {
   fullRange: [0, 0],
   persistedRange: null,
   persistedChannels: new Set(),
+  invertedSides: {
+    right: false,
+    left: false,
+  },
   markers: {
     blue: null,
     red: null,
@@ -106,13 +116,24 @@ function formatMarkerTime(fid) {
   return `${(fid / 50).toFixed(2)}s`;
 }
 
+function displayedChannelValue(row, channel) {
+  const value = row[channel];
+  if (!Number.isFinite(value)) {
+    return value;
+  }
+  const side = Object.entries(CHANNEL_SIDE_PREFIXES).find(([, prefix]) =>
+    channel.startsWith(prefix),
+  )?.[0];
+  return side && state.invertedSides[side] ? -value : value;
+}
+
 function buildMarkerOverlay(selectedChannels, subplotMeta, dataRows) {
-  // Right-side annotation flow:
+  // In-plot annotation flow:
   // 1) Resolve blue/red marker FIDs to concrete visible rows.
   // 2) Draw full-height shared-x lines for active markers.
   // 3) For every subplot, stack its y label, then blue and red values at the
-  //    far right. The y label is independent of marker state.
-  // This keeps the per-channel annotation order stable while markers change.
+  //    top-right inside its domain. Scale spacing to keep all labels within
+  //    compact subplots. The y label is independent of marker state.
   const markerRows = Object.entries(state.markers)
     .map(([key, markerFid]) => {
       if (!Number.isFinite(markerFid)) {
@@ -141,7 +162,7 @@ function buildMarkerOverlay(selectedChannels, subplotMeta, dataRows) {
     },
   }));
 
-  const rightEdgeAnnotations = [];
+  const plotAnnotations = [];
   const markerOrder = ["blue", "red"];
   const markerSlotOffset = {
     blue: 1,
@@ -152,14 +173,16 @@ function buildMarkerOverlay(selectedChannels, subplotMeta, dataRows) {
     if (!channel) {
       return;
     }
+    const annotationStep = Math.min(0.038, subplot.domainHeight / 3.2);
 
-    rightEdgeAnnotations.push({
+    plotAnnotations.push({
       xref: "paper",
       yref: "paper",
-      x: 1.01,
+      x: 0.995,
       y: subplot.domainTop,
-      xanchor: "left",
+      xanchor: "right",
       yanchor: "top",
+      align: "right",
       showarrow: false,
       yshift: -2,
       text: channelLabel(channel),
@@ -167,8 +190,8 @@ function buildMarkerOverlay(selectedChannels, subplotMeta, dataRows) {
         size: 11,
         color: "#c9d5e5",
       },
-      bgcolor: "rgba(10,15,29,0.92)",
-      bordercolor: "#c9d5e5",
+      bgcolor: "rgba(10,15,29,0.58)",
+      bordercolor: "rgba(201,213,229,0.72)",
       borderwidth: 1,
       borderpad: 2,
     });
@@ -178,17 +201,18 @@ function buildMarkerOverlay(selectedChannels, subplotMeta, dataRows) {
       if (!marker) {
         return;
       }
-      const magnitude = marker.row[channel];
+      const magnitude = displayedChannelValue(marker.row, channel);
       if (!Number.isFinite(magnitude)) {
         return;
       }
-      rightEdgeAnnotations.push({
+      plotAnnotations.push({
         xref: "paper",
         yref: "paper",
-        x: 1.01,
-        y: subplot.domainTop - markerSlotOffset[marker.key] * 0.038,
-        xanchor: "left",
+        x: 0.995,
+        y: subplot.domainTop - markerSlotOffset[marker.key] * annotationStep,
+        xanchor: "right",
         yanchor: "top",
+        align: "right",
         showarrow: false,
         yshift: -2,
         text: `${MARKER_CONFIG[marker.key].label}: ${formatMagnitude(magnitude)} @ FID ${marker.markerFid} (${formatMarkerTime(marker.markerFid)})`,
@@ -196,7 +220,7 @@ function buildMarkerOverlay(selectedChannels, subplotMeta, dataRows) {
           size: 10,
           color: MARKER_CONFIG[marker.key].color,
         },
-        bgcolor: "rgba(10,15,29,0.92)",
+        bgcolor: "rgba(10,15,29,0.58)",
         bordercolor: MARKER_CONFIG[marker.key].color,
         borderwidth: 1,
         borderpad: 2,
@@ -204,7 +228,7 @@ function buildMarkerOverlay(selectedChannels, subplotMeta, dataRows) {
     });
   });
 
-  return { shapes, annotations: rightEdgeAnnotations };
+  return { shapes, annotations: plotAnnotations };
 }
 
 function fidFromContextMenu(event) {
@@ -448,6 +472,7 @@ function applyViewport(range) {
 function saveViewerPreferences({
   range = state.persistedRange ?? activeRangeOrFullRange(),
   channels = state.persistedChannels,
+  invertedSides = state.invertedSides,
 } = {}) {
   try {
     const [fullStart, fullEnd] = state.fullRange;
@@ -475,6 +500,10 @@ function saveViewerPreferences({
       rangeStart,
       rangeEnd,
       selectedChannels,
+      invertedSides: {
+        right: Boolean(invertedSides.right),
+        left: Boolean(invertedSides.left),
+      },
     };
     localStorage.setItem(VIEWER_PREFS_STORAGE_KEY, JSON.stringify(payload));
     state.persistedRange = [rangeStart, rangeEnd];
@@ -498,7 +527,8 @@ function loadViewerPreferences() {
     // Restore flow:
     // 1) sanitize channel ids against current CSV headers
     // 2) sanitize range against dataset bounds
-    // 3) if restored values cannot produce a usable state, fall back to defaults
+    // 3) restore side inversion only from explicit booleans
+    // 4) if restored values cannot produce a usable state, fall back to defaults
     const available = new Set(state.channels);
     let selectedChannels = Array.isArray(parsed.selectedChannels)
       ? parsed.selectedChannels.filter((channel) => available.has(channel))
@@ -521,7 +551,15 @@ function loadViewerPreferences() {
       rangeEnd = fullEnd;
     }
 
-    return { selectedChannels, rangeStart, rangeEnd };
+    return {
+      selectedChannels,
+      rangeStart,
+      rangeEnd,
+      invertedSides: {
+        right: parsed.invertedSides?.right === true,
+        left: parsed.invertedSides?.left === true,
+      },
+    };
   } catch {
     return null;
   }
@@ -634,10 +672,10 @@ function renderPlot() {
     plot_bgcolor: "#111827",
     font: { color: "#c9d5e5", size: 11 },
     height: plotHeight,
-    margin: { l: 55, r: 320, t: 28, b: 55 },
+    margin: { l: 55, r: 24, t: 28, b: 55 },
     hovermode: "x unified",
     showlegend: false,
-    uirevision: `${range[0]}:${range[1]}:${selected.join("|")}`,
+    uirevision: `${range[0]}:${range[1]}:${selected.join("|")}:${state.invertedSides.right}:${state.invertedSides.left}`,
   };
   const subplotMeta = [];
   const traces = selected.map((channel, index) => {
@@ -668,6 +706,7 @@ function renderPlot() {
     subplotMeta.push({
       yAxisRef: `y${axisSuffix}`,
       domainTop,
+      domainHeight: domainTop - Math.max(0, domainBottom),
     });
 
     return {
@@ -675,7 +714,7 @@ function renderPlot() {
       mode: "lines",
       name: channelLabel(channel),
       x: dataRows.map((row) => row.fid),
-      y: dataRows.map((row) => row[channel]),
+      y: dataRows.map((row) => displayedChannelValue(row, channel)),
       xaxis: `x${axisSuffix}`,
       yaxis: `y${axisSuffix}`,
       connectgaps: false,
@@ -740,6 +779,8 @@ function enableControls() {
     elements.applyRange,
     elements.resetRange,
     elements.restoreRange,
+    elements.invertRight,
+    elements.invertLeft,
     elements.channelSearch,
     elements.selectAll,
     elements.clearAll,
@@ -765,6 +806,12 @@ async function loadData() {
       ? new Set(restoredPreferences.selectedChannels)
       : defaultSelectedChannels();
     state.persistedChannels = new Set(state.selectedChannels);
+    state.invertedSides = restoredPreferences?.invertedSides ?? {
+      right: false,
+      left: false,
+    };
+    elements.invertRight.checked = state.invertedSides.right;
+    elements.invertLeft.checked = state.invertedSides.left;
 
     elements.rangeStart.min = state.fullRange[0];
     elements.rangeStart.max = state.fullRange[1];
@@ -801,6 +848,16 @@ elements.resetRange.addEventListener("click", () => {
 elements.restoreRange.addEventListener("click", restorePersistedRange);
 elements.rangeStart.addEventListener("input", syncEndRangeSlider);
 elements.rangeEnd.addEventListener("input", syncEndRangeSlider);
+elements.invertRight.addEventListener("change", () => {
+  state.invertedSides.right = elements.invertRight.checked;
+  renderPlot();
+  saveViewerPreferences();
+});
+elements.invertLeft.addEventListener("change", () => {
+  state.invertedSides.left = elements.invertLeft.checked;
+  renderPlot();
+  saveViewerPreferences();
+});
 elements.rangeEndSlider.addEventListener("input", () => {
   elements.rangeEnd.value = elements.rangeEndSlider.value;
   elements.rangeEndSliderValue.value = elements.rangeEndSlider.value;
