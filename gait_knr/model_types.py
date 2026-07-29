@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import IntEnum
 
 
@@ -35,34 +35,55 @@ class DetectorConfig:
 @dataclass(frozen=True)
 class SideSpec:
     name: str
-    gyro_z_column: str
-    sign: float
+    csv_prefix: str
+    gyro_z_sign: float
+
+
+@dataclass
+class SensorFrame:
+    """All recorded measurements for one side at one synchronized frame."""
+
+    fid: int | None = None
+    acc_x: float | None = None
+    acc_y: float | None = None
+    acc_z: float | None = None
+    gyr_x: float | None = None
+    gyr_y: float | None = None
+    gyr_z: float | None = None
+    pos_rad: float | None = None
+    vel_rad_s: float | None = None
+    tilt_forward_deg: float | None = None
+    tilt_accel_deg: float | None = None
 
 
 @dataclass
 class SideState:
-    state: GaitState = GaitState.STANCE
+    """Persistent gait phase, complete sensor frames, and derived motion signals."""
+
+    gait_state: GaitState = GaitState.STANCE
     event: GaitEvent = GaitEvent.NONE
-    phase_ms: float = 0.0
-    has_prev_gyro: bool = False
-    gyro_z_norm: float | None = None
-    prev_gyro_z_norm: float | None = None
-    gyro_pol: int = 0
-    prev_gyro_pol: int = 0
-    gyro_slope: int = 0
-    prev_gyro_slope: int = 0
-    swing_min_gyr_z: float | None = None
-    swing_min_fid: int | None = None
+    phase_elapsed_ms: float = 0.0
+    current_frame: SensorFrame = field(default_factory=SensorFrame)
+    previous_frame: SensorFrame = field(default_factory=SensorFrame)
+    has_previous_normalized_gyr_z: bool = False
+    normalized_gyr_z: float | None = None
+    previous_normalized_gyr_z: float | None = None
+    gyro_polarity: int = 0
+    previous_gyro_polarity: int = 0
+    gyro_slope_direction: int = 0
+    previous_gyro_slope_direction: int = 0
+    lowest_swing_gyr_z: float | None = None
+    lowest_swing_fid: int | None = None
 
 
 @dataclass(frozen=True)
 class FrameOutput:
-    state: GaitState
+    gait_state: GaitState
     event: GaitEvent
-    gyro_z_norm: float | None
-    gyro_pol: int
-    gyro_slope: int
-    phase_ms: float | None
-    swing_min_gyr_z: float | None
-    swing_min_fid: int | None
+    normalized_gyr_z: float | None
+    gyro_polarity: int
+    gyro_slope_direction: int
+    phase_elapsed_ms: float | None
+    lowest_swing_gyr_z: float | None
+    lowest_swing_fid: int | None
 

@@ -19,20 +19,20 @@ DEFAULT_OUTPUT = REPO_ROOT / "viewer" / "data" / "synchronized_walk.csv"
 KNR_COLUMNS = (
     "knr_right_state",
     "knr_right_event",
-    "knr_right_gyr_z_norm",
-    "knr_right_gyr_pol",
-    "knr_right_gyr_slope",
-    "knr_right_phase_ms",
-    "knr_right_swing_min_gyr_z",
-    "knr_right_swing_min_fid",
+    "knr_right_normalized_gyr_z",
+    "knr_right_gyro_polarity",
+    "knr_right_gyro_slope_direction",
+    "knr_right_phase_elapsed_ms",
+    "knr_right_lowest_swing_gyr_z",
+    "knr_right_lowest_swing_fid",
     "knr_left_state",
     "knr_left_event",
-    "knr_left_gyr_z_norm",
-    "knr_left_gyr_pol",
-    "knr_left_gyr_slope",
-    "knr_left_phase_ms",
-    "knr_left_swing_min_gyr_z",
-    "knr_left_swing_min_fid",
+    "knr_left_normalized_gyr_z",
+    "knr_left_gyro_polarity",
+    "knr_left_gyro_slope_direction",
+    "knr_left_phase_elapsed_ms",
+    "knr_left_lowest_swing_gyr_z",
+    "knr_left_lowest_swing_fid",
 )
 
 
@@ -81,14 +81,14 @@ def output_columns(fieldnames: list[str]) -> list[str]:
 
 def frame_output_columns(prefix: str, output: FrameOutput) -> dict[str, str]:
     return {
-        f"knr_{prefix}_state": str(int(output.state)),
+        f"knr_{prefix}_state": str(int(output.gait_state)),
         f"knr_{prefix}_event": str(int(output.event)),
-        f"knr_{prefix}_gyr_z_norm": format_optional_float(output.gyro_z_norm),
-        f"knr_{prefix}_gyr_pol": str(output.gyro_pol),
-        f"knr_{prefix}_gyr_slope": str(output.gyro_slope),
-        f"knr_{prefix}_phase_ms": format_optional_float(output.phase_ms),
-        f"knr_{prefix}_swing_min_gyr_z": format_optional_float(output.swing_min_gyr_z),
-        f"knr_{prefix}_swing_min_fid": format_optional_int(output.swing_min_fid),
+        f"knr_{prefix}_normalized_gyr_z": format_optional_float(output.normalized_gyr_z),
+        f"knr_{prefix}_gyro_polarity": str(output.gyro_polarity),
+        f"knr_{prefix}_gyro_slope_direction": str(output.gyro_slope_direction),
+        f"knr_{prefix}_phase_elapsed_ms": format_optional_float(output.phase_elapsed_ms),
+        f"knr_{prefix}_lowest_swing_gyr_z": format_optional_float(output.lowest_swing_gyr_z),
+        f"knr_{prefix}_lowest_swing_fid": format_optional_int(output.lowest_swing_fid),
     }
 
 
