@@ -16,21 +16,15 @@ STATE_NAMES = {
     6: "INIT_SWING",
     7: "MID_SWING",
 }
-EXPECTED_STATES = (1, 2, 5, 6, 7)
+STANCE_STATES = frozenset(range(0, 6))
 
 
 @dataclass(frozen=True)
 class SegmentationConfig:
     """Durations are inclusive validation limits in milliseconds."""
 
-    contact_min_ms: float = 360
-    contact_max_ms: float = 1_000
     stance_min_ms: float = 160
     stance_max_ms: float = 9_000
-    push_off_min_ms: float = 0
-    push_off_max_ms: float = 260
-    init_swing_min_ms: float = 20
-    init_swing_max_ms: float = 560
     cycle_min_ms: float = 1_200
     cycle_max_ms: float = 10_000
     wrap_max_ms: float = 2_000
@@ -57,27 +51,25 @@ class Cycle:
 
     def phase_duration_ms(self, state: int) -> float | None:
         """Return the dwell of state before its next logical phase."""
-        successors = {1: 2, 2: 5, 5: 6, 6: 7, 7: 1_007}
-        successor = successors[state]
+        successors = {6: 7, 7: 1_007}
+        successor = successors.get(state)
+        if successor is None:
+            return None
         if state not in self.phase_entry_ms or successor not in self.phase_entry_ms:
             return None
         return self.phase_entry_ms[successor] - self.phase_entry_ms[state]
 
     @property
     def stance_ms(self) -> float | None:
-        contact = self.phase_duration_ms(1)
-        stance = self.phase_duration_ms(2)
-        if contact is None or stance is None:
+        if 1 not in self.phase_entry_ms or 6 not in self.phase_entry_ms:
             return None
-        return contact + stance
+        return self.phase_entry_ms[6] - self.phase_entry_ms[1]
 
     @property
     def swing_ms(self) -> float | None:
-        push_off = self.phase_duration_ms(5)
-        init_swing = self.phase_duration_ms(6)
-        if push_off is None or init_swing is None:
+        if 6 not in self.phase_entry_ms or 1_007 not in self.phase_entry_ms:
             return None
-        return push_off + init_swing
+        return self.phase_entry_ms[1_007] - self.phase_entry_ms[6]
 
 
 def _float(value: str | None) -> float | None:
@@ -91,8 +83,7 @@ def _state(value: str | None) -> int | None:
     parsed = _float(value)
     if parsed is None or not parsed.is_integer():
         return None
-    raw_state = int(parsed)
-    return 2 if raw_state in (3, 4) else raw_state
+    return int(parsed)
 
 
 def _reject_partial(index: int, start_row: int, end_row: int, reason: str) -> Cycle:
@@ -108,14 +99,8 @@ def _reject_partial(index: int, start_row: int, end_row: int, reason: str) -> Cy
 
 
 def _validate(candidate: Cycle, config: SegmentationConfig) -> tuple[bool, str]:
-    if candidate.state_path != list(EXPECTED_STATES):
-        return False, f"abnormal state path {candidate.state_path}; expected {list(EXPECTED_STATES)}"
-
     checks = (
-        ("contact", candidate.phase_duration_ms(1), config.contact_min_ms, config.contact_max_ms),
-        ("stance", candidate.phase_duration_ms(2), config.stance_min_ms, config.stance_max_ms),
-        ("push_off", candidate.phase_duration_ms(5), config.push_off_min_ms, config.push_off_max_ms),
-        ("init_swing", candidate.phase_duration_ms(6), config.init_swing_min_ms, config.init_swing_max_ms),
+        ("stance", candidate.stance_ms, config.stance_min_ms, config.stance_max_ms),
         ("cycle", candidate.duration_ms, config.cycle_min_ms, config.cycle_max_ms),
         ("confirmation_wrap", candidate.phase_duration_ms(7), 0, config.wrap_max_ms),
     )
@@ -141,9 +126,10 @@ def segment_rows(
     index = 1
     last_row_number = 0
 
-    # The candidate progresses only when a state changes. This permits streaming:
-    # each row updates current state, and only the observed 7→1 edge finalizes
-    # the preceding cycle. Gaps and illegal edges discard pending state safely.
+    # A cycle starts in state 1 and permits any 0–5 transitions while in stance.
+    # The first 6 begins swing, 7 completes its recorded phase, and the next 1
+    # closes the cycle. This preserves state-0 failsafes as ordinary stance time
+    # while rejecting transitions that move from swing back into stance.
     for row_number, row in enumerate(rows, start=1):
         last_row_number = row_number
         timestamp = _float(row.get("t_ms"))
@@ -186,10 +172,11 @@ def segment_rows(
             continue
 
         if state == 1:
-            if candidate is not None and candidate.state_path == list(EXPECTED_STATES):
+            if candidate is not None and candidate.state_path[-1] == 7:
                 # The next contact is not part of the cycle, but is used to
                 # causally confirm that the final MID_SWING phase completed.
                 candidate.phase_entry_ms[1_007] = timestamp
+                candidate.end_ms = timestamp
                 accepted, reason = _validate(candidate, config)
                 candidate.accepted = accepted
                 candidate.reason = reason
@@ -215,15 +202,19 @@ def segment_rows(
                 state_path=[1],
             )
         elif candidate is not None:
-            expected_next = EXPECTED_STATES[len(candidate.state_path)] if len(candidate.state_path) < len(EXPECTED_STATES) else None
-            if state == expected_next:
+            previous_state = candidate.state_path[-1]
+            if state in STANCE_STATES and previous_state in STANCE_STATES:
                 candidate.state_path.append(state)
                 candidate.phase_entry_ms[state] = timestamp
-                if state == 7:
-                    # A 1→...→7 cycle ends at MID_SWING entry. It is retained
-                    # until the next 7→1 edge proves the stream can continue.
-                    candidate.end_row = row_number
-                    candidate.end_ms = timestamp
+            elif state == 6 and previous_state in STANCE_STATES:
+                candidate.state_path.append(state)
+                candidate.phase_entry_ms[6] = timestamp
+            elif state == 7 and previous_state == 6:
+                candidate.state_path.append(state)
+                candidate.phase_entry_ms[7] = timestamp
+                # A 1→...→7 cycle stays pending until its 7→1 edge confirms
+                # the complete swing interval and provides its end timestamp.
+                candidate.end_row = row_number
             else:
                 candidate.end_row = row_number - 1
                 candidate.accepted = False

@@ -14,7 +14,7 @@ python3 -m pip install -e .
 
 ```sh
 gait-analyze segment \
-  data/rr_20260813_174605/rr_robot_2309830B93E80DF4383DB3ED73C63267_20260813_174605_01walk.csv
+  "data/Joint coordinates/P1 ZGJ/rr_20260821_110517/rr_robot_2309830B93E80DF4383DB3ED73C63267_20260821_110517_01walk.csv"
 ```
 
 Use `--yes` for a non-interactive run. Override automatic decisions with
@@ -28,6 +28,12 @@ then closes after final confirmation. Use `--no-show-review-plot` for headless
 or scripted runs. On macOS, the CLI continues pumping the figure event loop
 while it waits for terminal input, so the toolbar stays responsive. Index lists
 accept comma-separated ranges; trailing commas such as `12-15,` are allowed.
+When a matching `*_cycle_review.json` (or, if needed, `.csv`) already exists
+in the mirrored output folder, its manual accept/reject decisions are restored
+before the table and review plot open. The analyzer verifies the saved cycle
+bounds, timestamps, and state path against the current segmentation; unmatched
+decisions are skipped. Automatic decisions are recalculated, and choices made
+with the current prompts or `--accept`/`--reject` options take precedence.
 
 ## Causal state model
 
@@ -46,7 +52,14 @@ fragments, and invalid timing are reported as rejected cycles.
 
 ## Output
 
-For an input named `walk.csv`, `output/` contains:
+Artifacts mirror the input CSV's parent directory beneath `data/`. For example:
+
+```text
+data/Joint coordinates/P1 ZGJ/rr_20260821_110517/walk.csv
+output/Joint coordinates/P1 ZGJ/rr_20260821_110517/walk_cycle_review.csv
+```
+
+For an input named `walk.csv`, its matching directory under `output/` contains:
 
 - `walk_cycle_review.csv` and `.json`: all candidate cycles, timings,
   auto/user decision, and rejection reason.
@@ -61,4 +74,5 @@ For an input named `walk.csv`, `output/` contains:
 - `walk_normalized_cycles.png`: white-background stacked overlays and mean for
   selected channels.
 
-The input CSV is never modified.
+The input CSV is never modified or copied. CSV inputs must be located under
+`data/`.

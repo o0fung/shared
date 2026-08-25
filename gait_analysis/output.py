@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -16,6 +17,127 @@ DISCRETE_COLUMNS = {
     "cfg_gait_model", "cfg_gait_mode", "cfg_side_is_left",
 }
 IDENTIFIER_COLUMNS = {"t_ms", "frame_fid", "walk_fid", "cfg_fid", "note", "packet_type", "source_mode"}
+REVIEW_DECISIONS = {"forced_accept", "forced_reject"}
+
+
+@dataclass(frozen=True)
+class SavedReviewDecision:
+    """A manual decision paired with the cycle identity that produced it."""
+
+    cycle_index: int
+    start_row: int
+    end_row: int
+    start_ms: float | None
+    end_ms: float | None
+    state_path: str
+    accepted: bool
+    user_decision: str
+
+
+def _parse_optional_float(value: object) -> float | None:
+    if value in (None, ""):
+        return None
+    if isinstance(value, bool):
+        raise ValueError("timestamp must be numeric")
+    return float(value)
+
+
+def _parse_accepted(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        if value.lower() == "true":
+            return True
+        if value.lower() == "false":
+            return False
+    raise ValueError("accepted must be a boolean")
+
+
+def _saved_decision(record: dict[str, object]) -> SavedReviewDecision | None:
+    """Validate one persisted record and return its explicit manual decision."""
+    required = {"cycle_index", "start_row", "end_row", "start_ms", "end_ms", "state_path", "accepted", "user_decision"}
+    if not required.issubset(record):
+        raise ValueError("review record is missing required fields")
+    user_decision = record["user_decision"]
+    if user_decision not in {"auto", *REVIEW_DECISIONS}:
+        raise ValueError("review record has an unknown user decision")
+    if user_decision not in REVIEW_DECISIONS:
+        return None
+    accepted = _parse_accepted(record["accepted"])
+    if accepted != (user_decision == "forced_accept"):
+        raise ValueError("review decision does not match accepted state")
+    state_path = record["state_path"]
+    if not isinstance(state_path, str):
+        raise ValueError("state path must be a string")
+    return SavedReviewDecision(
+        cycle_index=int(record["cycle_index"]),
+        start_row=int(record["start_row"]),
+        end_row=int(record["end_row"]),
+        start_ms=_parse_optional_float(record["start_ms"]),
+        end_ms=_parse_optional_float(record["end_ms"]),
+        state_path=state_path,
+        accepted=accepted,
+        user_decision=user_decision,
+    )
+
+
+def _read_review_records(path: Path) -> list[dict[str, object]]:
+    if path.suffix == ".json":
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, list) or not all(isinstance(record, dict) for record in payload):
+            raise ValueError("review JSON must contain a list of records")
+        return payload
+    with path.open(encoding="utf-8", newline="") as stream:
+        return list(csv.DictReader(stream))
+
+
+def load_saved_review_decisions(output_dir: Path, stem: str) -> tuple[Path | None, list[SavedReviewDecision]]:
+    """Load manual decisions from JSON first, then CSV if the JSON is unusable."""
+    for path in (output_dir / f"{stem}_cycle_review.json", output_dir / f"{stem}_cycle_review.csv"):
+        if not path.is_file():
+            continue
+        try:
+            decisions = [_saved_decision(record) for record in _read_review_records(path)]
+            manual_decisions = [decision for decision in decisions if decision is not None]
+            if len({decision.cycle_index for decision in manual_decisions}) != len(manual_decisions):
+                raise ValueError("review has duplicate manual cycle indexes")
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            continue
+        return path, manual_decisions
+    return None, []
+
+
+def restore_saved_review_decisions(
+    cycles: list[Cycle], decisions: list[SavedReviewDecision]
+) -> tuple[int, int]:
+    """Restore decisions only where the saved and current cycle identities match."""
+    cycles_by_index = {cycle.index: cycle for cycle in cycles}
+    restored = 0
+    skipped = 0
+    # Replay only manual decisions after verifying the full segmentation identity.
+    # A changed source file or timing configuration leaves that cycle automatic.
+    for decision in decisions:
+        cycle = cycles_by_index.get(decision.cycle_index)
+        if cycle is None or (
+            cycle.start_row,
+            cycle.end_row,
+            cycle.start_ms,
+            cycle.end_ms,
+            "→".join(map(str, cycle.state_path)),
+        ) != (
+            decision.start_row,
+            decision.end_row,
+            decision.start_ms,
+            decision.end_ms,
+            decision.state_path,
+        ):
+            skipped += 1
+            continue
+        cycle.accepted = decision.accepted
+        cycle.user_decision = decision.user_decision
+        cycle.reason = "accepted by user" if decision.accepted else "rejected by user"
+        restored += 1
+    return restored, skipped
 
 
 def read_csv(path: Path) -> tuple[list[str], list[dict[str, str]]]:

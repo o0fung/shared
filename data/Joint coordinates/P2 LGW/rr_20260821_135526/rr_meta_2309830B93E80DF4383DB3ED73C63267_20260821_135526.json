@@ -1,0 +1,28 @@
+{
+  "schema_version": 2,
+  "device_address": "2309830B-93E8-0DF4-383D-B3ED73C63267",
+  "device_address_sanitized": "2309830B93E80DF4383DB3ED73C63267",
+  "session_kind": "AKR",
+  "session_root_dir": "/Users/lf/rr_data/rr_20260821_135526",
+  "session_timestamp": "20260821_135526",
+  "segments": [
+    {
+      "segment_index": 1,
+      "open_reason": "record_start",
+      "close_reason": "manual_stop",
+      "started_utc": "2026-08-21T05:55:26.905431+00:00",
+      "ended_utc": "2026-08-21T05:57:14.651864+00:00",
+      "duration_s": 107.74890908400994,
+      "paths": {
+        "emg_csv": null,
+        "imu_csv": null,
+        "robot_csv": "/Users/lf/rr_data/rr_20260821_135526/rr_robot_2309830B93E80DF4383DB3ED73C63267_20260821_135526_01walk.csv"
+      },
+      "rows_written": {
+        "emg": 0,
+        "imu": 0,
+        "robot": 6370
+      }
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "schema_version": 2,
+  "device_address": "A2AD9630-0359-1242-B0F6-7FCB3B2A8932",
+  "device_address_sanitized": "A2AD963003591242B0F67FCB3B2A8932",
+  "session_kind": "AKR",
+  "session_root_dir": "/Users/lf/rr_data/rr_20260825_142525",
+  "session_timestamp": "20260825_142525",
+  "segments": [
+    {
+      "segment_index": 1,
+      "open_reason": "record_start",
+      "close_reason": "manual_stop",
+      "started_utc": "2026-08-25T06:25:25.078076+00:00",
+      "ended_utc": "2026-08-25T06:27:09.839339+00:00",
+      "duration_s": 104.76314308299334,
+      "paths": {
+        "emg_csv": null,
+        "imu_csv": null,
+        "robot_csv": "/Users/lf/rr_data/rr_20260825_142525/rr_robot_A2AD963003591242B0F67FCB3B2A8932_20260825_142525_01walk.csv"
+      },
+      "rows_written": {
+        "emg": 0,
+        "imu": 0,
+        "robot": 6224
+      }
+    }
+  ]
+}

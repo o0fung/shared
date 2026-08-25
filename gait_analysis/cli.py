@@ -11,7 +11,15 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from .output import cycle_report, normalize_cycles, read_csv, write_normalized, write_review
+from .output import (
+    cycle_report,
+    load_saved_review_decisions,
+    normalize_cycles,
+    read_csv,
+    restore_saved_review_decisions,
+    write_normalized,
+    write_review,
+)
 from .plotting import (
     DEFAULT_CHANNELS,
     close_trial_review,
@@ -50,6 +58,16 @@ def _parse_indices(value: str) -> set[int]:
         except ValueError as error:
             raise typer.BadParameter(f"invalid index selection {token!r}; use 1,3-5") from error
     return indices
+
+
+def _artifact_dir(csv_file: Path) -> Path:
+    """Mirror an input CSV's parent directory from data/ into output/."""
+    data_root = Path("data").resolve()
+    try:
+        relative_parent = csv_file.resolve().parent.relative_to(data_root)
+    except ValueError as error:
+        raise typer.BadParameter(f"CSV must be located under {data_root}", param_hint="csv_file") from error
+    return Path("output").resolve() / relative_parent
 
 
 def _prompt_while_review_open(prompt: Callable[[], PromptValue], review_window: object | None) -> PromptValue:
@@ -102,14 +120,23 @@ def _show_review(cycles: list) -> None:
             stance_text,
             swing_text,
             f"{decision}: {reason}",
+            style="green" if cycle.accepted else "red",
         )
     console.print(table)
+
+
+def _apply_forced_decisions(cycles: list, forced_accept: set[int], forced_reject: set[int]) -> None:
+    """Apply current-run choices after restored decisions so explicit input wins."""
+    for cycle in cycles:
+        if cycle.index in forced_accept:
+            cycle.accepted, cycle.user_decision, cycle.reason = True, "forced_accept", "accepted by user"
+        elif cycle.index in forced_reject:
+            cycle.accepted, cycle.user_decision, cycle.reason = False, "forced_reject", "rejected by user"
 
 
 @app.command()
 def segment(
     csv_file: Path = typer.Argument(..., exists=True, readable=True, help="rr_app walk CSV to analyze."),
-    output_dir: Path = typer.Option(Path("output"), "--output-dir", "-o", help="Directory for generated artifacts."),
     points: int = typer.Option(101, min=2, help="Samples on the normalized 0–100% grid."),
     accept: str = typer.Option("", help="Cycle indexes/ranges to force accept, e.g. 2,5-7."),
     reject: str = typer.Option("", help="Cycle indexes/ranges to force reject, e.g. 3,8-9."),
@@ -127,9 +154,16 @@ def segment(
         raise typer.BadParameter("CSV must contain t_ms and walk_state columns")
     config = SegmentationConfig(stance_max_ms=stance_max_ms, cycle_max_ms=cycle_max_ms, wrap_max_ms=wrap_max_ms)
     cycles = segment_rows(rows, config)
-    output_dir = output_dir.resolve()
-    output_dir.mkdir(parents=True, exist_ok=True)
-    trial_plot_path = output_dir / f"{csv_file.stem}_trial_review.png"
+    artifact_dir = _artifact_dir(csv_file)
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    review_path, saved_decisions = load_saved_review_decisions(artifact_dir, csv_file.stem)
+    if review_path is not None:
+        restored, skipped = restore_saved_review_decisions(cycles, saved_decisions)
+        console.print(
+            f"Restored {restored} saved manual decision(s) from [bold]{review_path}[/bold]"
+            f"; skipped {skipped} that no longer match."
+        )
+    trial_plot_path = artifact_dir / f"{csv_file.stem}_trial_review.png"
     _show_review(cycles)
     review_window = create_trial_review(rows, cycles)
     if review_window is not None:
@@ -148,16 +182,12 @@ def segment(
             console.print("The review plot remains open while you enter index ranges below.")
             active_review_window = review_window if shown else None
             forced_accept = _parse_indices(
-                _prompt_text("Force accept indexes (blank keeps auto decision)", "", active_review_window)
+                _prompt_text("Force accept indexes (blank keeps restored or auto decision)", "", active_review_window)
             )
             forced_reject = _parse_indices(
-                _prompt_text("Force reject indexes (blank keeps auto decision)", "", active_review_window)
+                _prompt_text("Force reject indexes (blank keeps restored or auto decision)", "", active_review_window)
             )
-        for cycle in cycles:
-            if cycle.index in forced_accept:
-                cycle.accepted, cycle.user_decision, cycle.reason = True, "forced_accept", "accepted by user"
-            elif cycle.index in forced_reject:
-                cycle.accepted, cycle.user_decision, cycle.reason = False, "forced_reject", "rejected by user"
+        _apply_forced_decisions(cycles, forced_accept, forced_reject)
 
         if review_window is not None:
             refresh_trial_review(review_window, cycles, trial_plot_path)
@@ -167,12 +197,12 @@ def segment(
             raise typer.Abort()
 
         stem = csv_file.stem
-        review_csv, review_json = write_review(output_dir, stem, cycles)
+        review_csv, review_json = write_review(artifact_dir, stem, cycles)
         fields, normalized = normalize_cycles(headers, rows, cycles, points)
-        normalized_csv = write_normalized(output_dir, stem, fields, normalized)
+        normalized_csv = write_normalized(artifact_dir, stem, fields, normalized)
         console.print(f"Wrote [bold]{review_csv}[/bold], {review_json}, and {normalized_csv}")
         if not no_plot and normalized:
-            plot_path = output_dir / f"{stem}_normalized_cycles.png"
+            plot_path = artifact_dir / f"{stem}_normalized_cycles.png"
             plot_normalized(normalized, [value.strip() for value in plot_channels.split(",")], plot_path)
             console.print(f"Wrote [bold]{plot_path}[/bold]")
     finally:
