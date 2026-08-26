@@ -11,7 +11,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 
-from .segmenter import Cycle
+from .segmenter import QUALITY_ACCEPTED, QUALITY_REVIEW, Cycle
 
 
 DEFAULT_CHANNELS = ("walk_state", "walk_pos_rad", "walk_vel_rad_s", "walk_tq_nm", "walk_tilt_forward_deg", "walk_gyr_y")
@@ -89,15 +89,27 @@ def _draw_cycle_overlays(review: TrialReviewFigure, cycles: list[Cycle]) -> None
         end_index = cycle.end_row - 1
         if not 0 <= start_index < len(timestamps) or not 0 <= end_index < len(timestamps):
             continue
-        start, end = timestamps[start_index], timestamps[end_index]
+        start = timestamps[start_index]
+        # Quality color represents stance only: a transition into state 6 begins
+        # swing, so keep states 6–7 unshaded. Incomplete candidates without a
+        # state-6 entry retain their final-row span to show their review status.
+        stance_end_ms = cycle.phase_entry_ms.get(6)
+        if stance_end_ms is not None and np.isfinite(stance_end_ms):
+            end = stance_end_ms / 1_000
+        else:
+            end = cycle.end_ms / 1_000 if cycle.end_ms is not None and np.isfinite(cycle.end_ms) else timestamps[end_index]
         if not np.isfinite(start) or not np.isfinite(end):
             continue
-        color = "#2E7D32" if cycle.accepted else "#C62828"
-        alpha = 0.07 if cycle.accepted else 0.12
+        color = (
+            "#2E7D32" if cycle.quality_status == QUALITY_ACCEPTED
+            else "#F9A825" if cycle.quality_status == QUALITY_REVIEW
+            else "#C62828"
+        )
+        alpha = 0.07 if cycle.quality_status == QUALITY_ACCEPTED else 0.12
         review.overlay_artists.extend(axis.axvspan(start, end, color=color, alpha=alpha, linewidth=0) for axis in axes)
         review.overlay_artists.append(
             axes[0].annotate(
-                str(cycle.index),
+                str(cycle.index) if cycle.step_code is None else f"{cycle.index} ({cycle.step_code})",
                 xy=(start, 0.98 - ((cycle.index - 1) % 3) * 0.12),
                 xycoords=("data", "axes fraction"),
                 xytext=(2, 0),
@@ -130,7 +142,7 @@ def create_trial_review(rows: list[dict[str, str]], cycles: list[Cycle]) -> Tria
         axis.grid(alpha=0.15)
         axis.set_ylabel(channel)
     axes[-1].set_xlabel("Trial time (s)")
-    figure.suptitle("Full trial review: green accepted, red rejected; labels are cycle indexes")
+    figure.suptitle("Full trial review: green accepted, yellow review, red rejected; labels are cycle indexes")
     figure.tight_layout()
     review = TrialReviewFigure(figure=figure, axes=list(axes), timestamps=timestamps, overlay_artists=[])
     _draw_cycle_overlays(review, cycles)

@@ -28,6 +28,32 @@ def test_normalizes_continuous_and_discrete_channels() -> None:
 
 def test_cycle_report_uses_state_ranges_for_phase_durations() -> None:
     rows = [
+        {"t_ms": "0", "walk_state": "1", "walk_out": "0", "note": ""},
+        {"t_ms": "400", "walk_state": "2", "walk_out": "6", "note": ""},
+        {"t_ms": "800", "walk_state": "5", "walk_out": "0", "note": ""},
+        {"t_ms": "850", "walk_state": "2", "walk_out": "0", "note": ""},
+        {"t_ms": "920", "walk_state": "6", "walk_out": "0", "note": ""},
+        {"t_ms": "1200", "walk_state": "7", "walk_out": "0", "note": ""},
+        {"t_ms": "1220", "walk_state": "1", "walk_out": "1", "note": ""},
+    ]
+
+    cycle = next(cycle for cycle in segment_rows(rows) if cycle.accepted)
+    report = cycle_report(cycle)
+
+    assert report["stance_ms"] == 920
+    assert report["swing_ms"] == 300
+    assert report["swing_phase_ms"] == 280
+    assert report["confirmation_wrap_ms"] == 20
+    assert report["cycle_ms"] == 1220
+    assert report["segment_type"] == "full_cycle"
+    assert report["step_type"] == "walk_out_0_6_0"
+    assert report["step_code"] == "W060"
+    assert report["walk_out_values"] == "0,6"
+    assert report["walk_out_pattern"] == "0→6→0"
+
+
+def test_normalization_excludes_duration_only_transition_steps() -> None:
+    rows = [
         {"t_ms": "0", "walk_state": "1", "note": ""},
         {"t_ms": "400", "walk_state": "2", "note": ""},
         {"t_ms": "800", "walk_state": "5", "note": ""},
@@ -37,12 +63,9 @@ def test_cycle_report_uses_state_ranges_for_phase_durations() -> None:
         {"t_ms": "1220", "walk_state": "1", "note": ""},
     ]
 
-    cycle = next(cycle for cycle in segment_rows(rows) if cycle.accepted)
-    report = cycle_report(cycle)
+    _, records = normalize_cycles(list(rows[0]), rows, segment_rows(rows), points=3)
 
-    assert report["stance_ms"] == 920
-    assert report["swing_ms"] == 300
-    assert report["cycle_ms"] == 1220
+    assert {record["cycle_index"] for record in records} == {2}
 
 
 def _cycle(index: int = 1) -> Cycle:

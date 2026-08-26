@@ -5,7 +5,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import sys
-from typing import Callable, TypeVar
+from typing import Callable, Literal, TypeVar
 
 import typer
 from rich.console import Console
@@ -30,7 +30,13 @@ from .plotting import (
     refresh_trial_review,
     save_trial_review,
 )
-from .segmenter import SegmentationConfig, segment_rows
+from .segmenter import (
+    QUALITY_ACCEPTED,
+    QUALITY_REJECTED,
+    SegmentationConfig,
+    apply_session_timing_quality,
+    segment_rows,
+)
 
 app = typer.Typer(help="Causally segment and normalize rr_app walk CSV files.")
 console = Console()
@@ -92,17 +98,28 @@ def _prompt_text(label: str, default: str, review_window: object | None) -> str:
     return value.rstrip("\r\n") or default
 
 
-def _confirm_write(review_window: object | None) -> bool:
+def _parse_write_action(value: str) -> Literal["write", "review", "abort"]:
+    """Interpret the final prompt, treating unknown input as a safe abort."""
+    normalized = value.strip().lower()
+    if normalized in {"y", "yes"}:
+        return "write"
+    if normalized in {"r", "review"}:
+        return "review"
+    return "abort"
+
+
+def _confirm_write(review_window: object | None) -> Literal["write", "review", "abort"]:
+    prompt = "Write review, normalized CSV, and plot? (y=write / r=return to review / n=abort)"
     if review_window is None:
-        return typer.confirm("Write review, normalized CSV, and plot?")
-    console.print("Write review, normalized CSV, and plot? [y/N]: ", end="")
+        return _parse_write_action(typer.prompt(prompt, default="n"))
+    console.print(f"{prompt}: ", end="")
     value = _prompt_while_review_open(sys.stdin.readline, review_window)
-    return value.strip().lower() in {"y", "yes"}
+    return _parse_write_action(value)
 
 
 def _show_review(cycles: list) -> None:
     table = Table(title="Causal gait-cycle review")
-    for column in ("Index", "Rows", "State path", "Cycle ms", "Stance ms (%)", "Swing ms (%)", "Decision / reason"):
+    for column in ("Index", "Rows", "State path", "Type", "walk_out pattern", "Cycle ms", "Stance ms (%)", "Swing ms (%)", "Decision / reason"):
         table.add_column(column)
     for cycle in cycles:
         report = cycle_report(cycle)
@@ -110,17 +127,19 @@ def _show_review(cycles: list) -> None:
         swing = report["swing_ms"]
         stance_text = "-" if stance is None else f"{stance:.0f} ({report['stance_percent']:.1f}%)"
         swing_text = "-" if swing is None else f"{swing:.0f} ({report['swing_percent']:.1f}%)"
-        decision = "ACCEPT" if cycle.accepted else "REJECT"
+        decision = cycle.quality_status.upper()
         reason = cycle.reason or "valid"
         table.add_row(
             str(cycle.index),
             f"{cycle.start_row}-{cycle.end_row}",
             str(report["state_path"]),
+            str(report["step_code"] or report["step_type"]),
+            str(report["walk_out_pattern"]) or "-",
             "-" if report["cycle_ms"] is None else f"{report['cycle_ms']:.0f}",
             stance_text,
             swing_text,
             f"{decision}: {reason}",
-            style="green" if cycle.accepted else "red",
+            style="green" if cycle.quality_status == QUALITY_ACCEPTED else "yellow" if cycle.quality_status == "review" else "red",
         )
     console.print(table)
 
@@ -130,8 +149,46 @@ def _apply_forced_decisions(cycles: list, forced_accept: set[int], forced_reject
     for cycle in cycles:
         if cycle.index in forced_accept:
             cycle.accepted, cycle.user_decision, cycle.reason = True, "forced_accept", "accepted by user"
+            cycle.quality_status = QUALITY_ACCEPTED
         elif cycle.index in forced_reject:
             cycle.accepted, cycle.user_decision, cycle.reason = False, "forced_reject", "rejected by user"
+            cycle.quality_status = QUALITY_REJECTED
+
+
+def _review_decisions_interactively(
+    cycles: list,
+    review_window: object | None,
+    review_window_is_shown: bool,
+    trial_plot_path: Path,
+) -> None:
+    """Collect and display overrides until the operator writes or aborts.
+
+    Each pass leaves earlier choices applied so operators can inspect the
+    refreshed plot and alter only the indexes they reconsidered.
+    """
+    active_review_window = review_window if review_window_is_shown else None
+    while True:
+        console.print("The review plot remains open while you enter index ranges below.")
+        forced_accept = _parse_indices(
+            _prompt_text("Force accept indexes (blank keeps current decision)", "", active_review_window)
+        )
+        forced_reject = _parse_indices(
+            _prompt_text("Force reject indexes (blank keeps current decision)", "", active_review_window)
+        )
+        if forced_accept & forced_reject:
+            raise typer.BadParameter("--accept and --reject selections overlap")
+        _apply_forced_decisions(cycles, forced_accept, forced_reject)
+
+        if review_window is not None:
+            refresh_trial_review(review_window, cycles, trial_plot_path)
+        _show_review(cycles)
+
+        action = _confirm_write(active_review_window)
+        if action == "write":
+            return
+        if action == "abort":
+            raise typer.Abort()
+        console.print("Returning to accept/reject review.")
 
 
 @app.command()
@@ -144,16 +201,27 @@ def segment(
     no_plot: bool = typer.Option(False, help="Do not generate the post-confirmation normalized-cycle PNG."),
     no_show_review_plot: bool = typer.Option(False, help="Do not open the post-table Matplotlib review window."),
     plot_channels: str = typer.Option(",".join(DEFAULT_CHANNELS), help="Comma-separated normalized channels to plot."),
-    stance_max_ms: float = typer.Option(9_000, min=0, help="Maximum allowed stance-base dwell."),
-    cycle_max_ms: float = typer.Option(10_000, min=0, help="Maximum allowed completed cycle duration."),
-    wrap_max_ms: float = typer.Option(2_000, min=0, help="Maximum MID_SWING-to-contact confirmation duration."),
+    robust_z_max: float = typer.Option(3.5, min=0, help="Median/MAD timing outlier z-score threshold."),
+    cluster_log_duration_tolerance: float = typer.Option(
+        0.35, min=0, help="Maximum log-duration difference for initial cluster neighbours."
+    ),
+    cluster_stance_percent_tolerance: float = typer.Option(
+        10, min=0, help="Maximum stance-percent difference for initial cluster neighbours."
+    ),
+    cluster_min_cycles: int = typer.Option(5, min=2, help="Minimum cycles required for automatic timing acceptance."),
 ) -> None:
     """Review walk-state cycles, then write accepted normalized telemetry."""
     headers, rows = read_csv(csv_file)
     if not {"t_ms", "walk_state"}.issubset(headers):
         raise typer.BadParameter("CSV must contain t_ms and walk_state columns")
-    config = SegmentationConfig(stance_max_ms=stance_max_ms, cycle_max_ms=cycle_max_ms, wrap_max_ms=wrap_max_ms)
+    config = SegmentationConfig(
+        robust_z_max=robust_z_max,
+        cluster_log_duration_tolerance=cluster_log_duration_tolerance,
+        cluster_stance_percent_tolerance=cluster_stance_percent_tolerance,
+        cluster_min_cycles=cluster_min_cycles,
+    )
     cycles = segment_rows(rows, config)
+    apply_session_timing_quality(cycles, config)
     artifact_dir = _artifact_dir(csv_file)
     artifact_dir.mkdir(parents=True, exist_ok=True)
     review_path, saved_decisions = load_saved_review_decisions(artifact_dir, csv_file.stem)
@@ -179,22 +247,18 @@ def segment(
         if forced_accept & forced_reject:
             raise typer.BadParameter("--accept and --reject selections overlap")
         if not yes and not accept and not reject:
-            console.print("The review plot remains open while you enter index ranges below.")
-            active_review_window = review_window if shown else None
-            forced_accept = _parse_indices(
-                _prompt_text("Force accept indexes (blank keeps restored or auto decision)", "", active_review_window)
-            )
-            forced_reject = _parse_indices(
-                _prompt_text("Force reject indexes (blank keeps restored or auto decision)", "", active_review_window)
-            )
-        _apply_forced_decisions(cycles, forced_accept, forced_reject)
-
-        if review_window is not None:
-            refresh_trial_review(review_window, cycles, trial_plot_path)
-        _show_review(cycles)
-        active_review_window = review_window if shown else None
-        if not yes and not _confirm_write(active_review_window):
-            raise typer.Abort()
+            _review_decisions_interactively(cycles, review_window, shown, trial_plot_path)
+        else:
+            _apply_forced_decisions(cycles, forced_accept, forced_reject)
+            if review_window is not None:
+                refresh_trial_review(review_window, cycles, trial_plot_path)
+            _show_review(cycles)
+            if not yes:
+                action = _confirm_write(review_window if shown else None)
+                if action == "abort":
+                    raise typer.Abort()
+                if action == "review":
+                    _review_decisions_interactively(cycles, review_window, shown, trial_plot_path)
 
         stem = csv_file.stem
         review_csv, review_json = write_review(artifact_dir, stem, cycles)

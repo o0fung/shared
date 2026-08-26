@@ -19,7 +19,7 @@ gait-analyze segment \
 
 Use `--yes` for a non-interactive run. Override automatic decisions with
 `--accept 2,5-7` or `--reject 3`. Timing checks are configurable, for example
-`--stance-max-ms 3000 --cycle-max-ms 5000`. Use `--plot-channels` to choose
+`--cluster-min-cycles 5 --robust-z-max 3.5`. Use `--plot-channels` to choose
 the normalized overlays, and `--no-plot` to skip only the post-confirmation
 normalized-cycle plot. After the first review table, an adjustable Matplotlib
 window opens for pan/zoom/save inspection and stays open while you enter
@@ -46,9 +46,38 @@ stance variants 3 and 4 into state 2 and steady walking normally traces:
 
 The analyzer reads rows in order and never uses future rows to choose a start.
 It only confirms a cycle when the closing `7 → 1` edge arrives. State `0` is
-treated as bootstrap/failsafe rather than a normal cycle boundary. Missing
-telemetry, `GAP:*` rows, illegal state transitions, incomplete prefix/suffix
-fragments, and invalid timing are reported as rejected cycles.
+treated as bootstrap/failsafe. A `5 → 0` edge is a separate duration-only
+transition step (`T50`) requiring manual review, and state 0
+starts the following full cycle. Transition steps do not contribute to
+phase-timing clustering or normalized full-cycle plots. Missing telemetry,
+`GAP:*` rows, illegal state transitions, incomplete prefix/suffix fragments,
+and invalid timing are reported as rejected cycles.
+
+## Timing quality filter
+
+For a homogeneous-speed recording, the analyzer rejects only structural
+failures: incomplete/illegal state paths, telemetry gaps, invalid timestamps,
+missing phase timing, or inconsistent timing arithmetic. Every structurally
+complete cycle then participates in a session-specific dominant timing-cluster
+search. The cluster center uses median/MAD values of log stance duration, log
+swing duration, and stance percentage; matching cycles are accepted and
+deviations are marked `review` unless manually accepted. This avoids treating
+slow or impaired gait as invalid. `--cluster-min-cycles`,
+`--cluster-log-duration-tolerance`, `--cluster-stance-percent-tolerance`, and
+`--robust-z-max` tune this behavior.
+
+`swing_ms` includes state 6 through the closing contact. Review artifacts also
+separate `swing_phase_ms` (state 6 to state 7) from
+`confirmation_wrap_ms` (state 7 to closing contact), so controller confirmation
+latency is not mistaken for the swing phase.
+
+## Step types
+
+Each review record includes a `step_type` and the compressed `walk_out_pattern`.
+The standard pattern in the current recording is `0→6→1→3`. A valid cycle
+with the distinct `0→6→0` pattern is labeled `walk_out_0_6_0`; it remains
+subject to the same timing-quality rules as standard cycles. Its compact
+table/plot code is `W060`.
 
 ## Output
 
@@ -61,8 +90,8 @@ output/Joint coordinates/P1 ZGJ/rr_20260821_110517/walk_cycle_review.csv
 
 For an input named `walk.csv`, its matching directory under `output/` contains:
 
-- `walk_cycle_review.csv` and `.json`: all candidate cycles, timings,
-  auto/user decision, and rejection reason.
+- `walk_cycle_review.csv` and `.json`: all candidate cycles, phase timing,
+  quality status, auto/user decision, and rejection/review reason.
 - `walk_trial_review.png`: full-trial tilt, gyro-z, torque, position, output,
   and state traces. Each cycle is shaded (green accepted, red rejected) and
   labeled with the matching terminal review-table index. It opens after the

@@ -44,6 +44,49 @@ def test_parse_indices_ignores_empty_comma_tokens() -> None:
     assert cli._parse_indices(",2,,4-5,") == {2, 4, 5}
 
 
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("y", "write"),
+        ("yes", "write"),
+        ("r", "review"),
+        ("review", "review"),
+        ("", "abort"),
+        ("no", "abort"),
+        ("unexpected", "abort"),
+    ],
+)
+def test_parse_write_action(value: str, expected: str) -> None:
+    assert cli._parse_write_action(value) == expected
+
+
+def test_interactive_review_repeats_after_revise_choice(monkeypatch, tmp_path: Path) -> None:
+    cycle = Cycle(
+        index=2,
+        start_row=10,
+        end_row=20,
+        start_ms=100.0,
+        end_ms=300.0,
+        state_path=[1, 2, 5, 6, 7],
+    )
+    prompt_values = iter(["2", "", "", "2"])
+    actions = iter(["review", "write"])
+    refreshed_decisions: list[tuple[bool, str]] = []
+
+    monkeypatch.setattr(cli, "_prompt_text", lambda *_: next(prompt_values))
+    monkeypatch.setattr(cli, "_confirm_write", lambda _: next(actions))
+    monkeypatch.setattr(cli, "_show_review", lambda _: None)
+    monkeypatch.setattr(
+        cli,
+        "refresh_trial_review",
+        lambda _, cycles, __: refreshed_decisions.append((cycles[0].accepted, cycles[0].user_decision)),
+    )
+
+    cli._review_decisions_interactively([cycle], object(), True, tmp_path / "review.png")
+
+    assert refreshed_decisions == [(True, "forced_accept"), (False, "forced_reject")]
+
+
 def test_prompt_pumps_review_events_until_terminal_input_finishes(monkeypatch) -> None:
     release = Event()
     calls: list[object] = []

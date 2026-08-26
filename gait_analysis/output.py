@@ -9,7 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .segmenter import Cycle
+from .segmenter import QUALITY_ACCEPTED, QUALITY_REJECTED, Cycle
 
 DISCRETE_COLUMNS = {
     "segment_id", "packet_type", "source_mode", "frame_fid", "note", "walk_fid",
@@ -136,6 +136,7 @@ def restore_saved_review_decisions(
         cycle.accepted = decision.accepted
         cycle.user_decision = decision.user_decision
         cycle.reason = "accepted by user" if decision.accepted else "rejected by user"
+        cycle.quality_status = QUALITY_ACCEPTED if decision.accepted else QUALITY_REJECTED
         restored += 1
     return restored, skipped
 
@@ -157,11 +158,24 @@ def cycle_report(cycle: Cycle) -> dict[str, object]:
         "start_ms": cycle.start_ms,
         "end_ms": cycle.end_ms,
         "state_path": "→".join(map(str, cycle.state_path)),
+        "segment_type": cycle.segment_type,
+        "step_type": cycle.step_type,
+        "step_code": cycle.step_code,
+        "walk_out_values": ",".join(map(str, sorted(cycle.walk_out_values))),
+        "walk_out_pattern": "→".join(map(str, cycle.walk_out_pattern)),
         "cycle_ms": duration,
         "stance_ms": stance,
         "swing_ms": swing,
-        "stance_percent": (100 * stance / duration) if stance is not None and duration else None,
+        "swing_phase_ms": cycle.swing_phase_ms,
+        "confirmation_wrap_ms": cycle.confirmation_wrap_ms,
+        "stance_percent": cycle.stance_percent,
         "swing_percent": (100 * swing / duration) if swing is not None and duration else None,
+        "has_full_phase_timing": cycle.has_full_phase_timing,
+        "cluster_size": cycle.cluster_size,
+        "cluster_stance_median_ms": cycle.cluster_stance_median_ms,
+        "cluster_swing_median_ms": cycle.cluster_swing_median_ms,
+        "cluster_stance_percent_median": cycle.cluster_stance_percent_median,
+        "quality_status": cycle.quality_status,
         "accepted": cycle.accepted,
         "user_decision": cycle.user_decision,
         "reason": cycle.reason,
@@ -210,7 +224,7 @@ def normalize_cycles(
     percent = np.linspace(0.0, 100.0, points)
     normalized: list[dict[str, float | int]] = []
     for cycle in cycles:
-        if not cycle.accepted:
+        if not cycle.accepted or not cycle.has_full_phase_timing:
             continue
         source = rows[cycle.start_row - 1:cycle.end_row]
         timestamps = np.array([float(row["t_ms"]) for row in source], dtype=float)
