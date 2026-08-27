@@ -18,6 +18,7 @@ DISCRETE_COLUMNS = {
 }
 IDENTIFIER_COLUMNS = {"t_ms", "frame_fid", "walk_fid", "cfg_fid", "note", "packet_type", "source_mode"}
 REVIEW_DECISIONS = {"forced_accept", "forced_reject"}
+NORMALIZED_SIGN_INVERTED_COLUMNS = {"walk_tq_nm"}
 
 
 @dataclass(frozen=True)
@@ -241,7 +242,10 @@ def normalize_cycles(
                 if column in DISCRETE_COLUMNS:
                     record[column] = int(values[nearest]) if np.isfinite(values[nearest]) else int(values[valid][0])
                 else:
-                    record[column] = float(np.interp(target[position], timestamps[valid], values[valid]))
+                    value = float(np.interp(target[position], timestamps[valid], values[valid]))
+                    # Normalized torque uses the analysis convention opposite to
+                    # the recorded controller sign; raw telemetry is unchanged.
+                    record[column] = -value if column in NORMALIZED_SIGN_INVERTED_COLUMNS else value
             normalized.append(record)
     return ["cycle_index", "gait_percent", *columns], normalized
 

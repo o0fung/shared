@@ -1,12 +1,13 @@
 import pytest
 from matplotlib import colors as mcolors
+import matplotlib.pyplot as plt
 
 from gait_analysis.plotting import (
-    angle_summary_series,
     close_trial_review,
     create_trial_review,
-    plot_r_statistic_angles,
+    plot_r_statistic,
     refresh_trial_review,
+    statistic_summary_series,
 )
 from gait_analysis.segmenter import QUALITY_REJECTED, segment_rows
 
@@ -65,7 +66,7 @@ def test_trial_review_shading_keeps_incomplete_cycle_status_visible() -> None:
     close_trial_review(review)
 
 
-def test_creates_r_statistic_angle_plot_with_derived_foot_tilt(tmp_path) -> None:
+def test_creates_r_statistic_plot_with_inverted_torque_and_x_grid(tmp_path, monkeypatch) -> None:
     summary = [
         {
             "gait_percent": 0.0,
@@ -73,6 +74,8 @@ def test_creates_r_statistic_angle_plot_with_derived_foot_tilt(tmp_path) -> None
             "walk_pos_rad_sd": 0.17453292519943295,
             "walk_tilt_forward_deg_mean": 5.0,
             "walk_tilt_forward_deg_sd": 2.0,
+            "walk_tq_nm_mean": -12.0,
+            "walk_tq_nm_sd": 1.5,
         },
         {
             "gait_percent": 100.0,
@@ -80,17 +83,29 @@ def test_creates_r_statistic_angle_plot_with_derived_foot_tilt(tmp_path) -> None
             "walk_pos_rad_sd": 0.2617993877991494,
             "walk_tilt_forward_deg_mean": 7.0,
             "walk_tilt_forward_deg_sd": 3.0,
+            "walk_tq_nm_mean": -15.0,
+            "walk_tq_nm_sd": 2.5,
         },
     ]
-    output_path = tmp_path / "angles.png"
+    output_path = tmp_path / "statistics.png"
 
-    series = angle_summary_series(summary)
+    series = statistic_summary_series(summary)
 
     assert series["Ankle Joint Angle"][1].mean() == pytest.approx(0.0)
     assert series["Leg Tilt Angle"][1].mean() == pytest.approx(0.0)
     assert series["Foot Tilt Angle"][1].mean() == pytest.approx(0.0)
     assert series["Ankle Joint Angle"][2][0] == pytest.approx(10.0)
     assert series["Foot Tilt Angle"][2][0] == pytest.approx(104**0.5)
-    assert plot_r_statistic_angles(summary, output_path)
+    assert series["Torque Output"][1].tolist() == [-12.0, -15.0]
+    assert series["Torque Output"][2].tolist() == [1.5, 2.5]
+    close_figure = plt.close
+    monkeypatch.setattr(plt, "close", lambda _: None)
+    assert plot_r_statistic(summary, output_path)
+    figure = plt.gcf()
+    assert len(figure.axes) == 4
+    for axis in figure.axes:
+        assert axis.get_xticks().tolist() == [0, 25, 50, 75, 100]
+        assert all(line.get_visible() for line in axis.get_xgridlines())
+    close_figure(figure)
     assert output_path.is_file()
     assert output_path.stat().st_size > 0

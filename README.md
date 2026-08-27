@@ -196,20 +196,22 @@ For an input named `walk.csv`, its matching directory under `output/` contains:
   PNG export remains available if no interactive backend exists.
 - `walk_normalized_cycles.csv`: accepted numeric telemetry on a 0–100% grid
   (101 samples by default). Continuous values are linearly interpolated;
-  state and identifier-like fields use nearest samples.
+  state and identifier-like fields use nearest samples. `walk_tq_nm` uses the
+  inverse of the recorded controller sign in normalized artifacts.
 - `walk_normalized_cycles_summary.csv`: one row per gait-percent point, with
   `<channel>_mean` and `<channel>_sd` for each continuous telemetry channel
   across accepted cycles. The SD is the sample standard deviation (`n−1`);
   it is `NaN` when only one cycle contributes. Identifier and discrete fields
   are excluded because their numeric encodings are not meaningful averages.
 - `walk_normalized_cycles_r_statistic.png`: publication-style plots of ankle
-  joint angle, leg tilt angle, and foot tilt angle. Each panel uses a solid
-  mean with a shaded mean ± sample-SD band, a 0–100% gait-cycle x-axis, and a
-  fixed −30° to +30° y-axis, except foot tilt which uses −50° to +50°. Ankle
+  joint angle, leg tilt angle, foot tilt angle, and Torque Output (Nm). Each
+  panel uses a solid mean with a shaded mean ± sample-SD band and a 0–100%
+  gait-cycle x-axis. Angle panels have fixed −30° to +30° ranges, except foot
+  tilt which uses −50° to +50°; Torque Output uses automatic Nm scaling. Ankle
   angle converts `walk_pos_rad` to degrees; foot tilt is ankle angle minus leg
   tilt, with SD calculated by independent error propagation. Each displayed
   angle waveform is independently mean-centered across the gait cycle; its SD
-  band is unchanged.
+  band is unchanged. Torque Output uses the inverted normalized-torque sign.
 - `walk_normalized_cycles.png`: white-background stacked overlays and mean for
   selected channels.
 

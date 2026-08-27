@@ -63,14 +63,16 @@ def plot_normalized(records: list[dict[str, float | int]], channels: list[str], 
     plt.close(figure)
 
 
-def angle_summary_series(summary: list[dict[str, float]]) -> dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]]:
-    """Return publication angle means and sample SDs in degrees."""
+def statistic_summary_series(summary: list[dict[str, float]]) -> dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]]:
+    """Return publication angle and torque means with their sample SDs."""
     required = {
         "gait_percent",
         "walk_pos_rad_mean",
         "walk_pos_rad_sd",
         "walk_tilt_forward_deg_mean",
         "walk_tilt_forward_deg_sd",
+        "walk_tq_nm_mean",
+        "walk_tq_nm_sd",
     }
     if not summary or not required.issubset(summary[0]):
         return {}
@@ -79,9 +81,12 @@ def angle_summary_series(summary: list[dict[str, float]]) -> dict[str, tuple[np.
     ankle_sd = np.degrees(np.asarray([record["walk_pos_rad_sd"] for record in summary], dtype=float))
     leg_mean = np.asarray([record["walk_tilt_forward_deg_mean"] for record in summary], dtype=float)
     leg_sd = np.asarray([record["walk_tilt_forward_deg_sd"] for record in summary], dtype=float)
+    torque_mean = np.asarray([record["walk_tq_nm_mean"] for record in summary], dtype=float)
+    torque_sd = np.asarray([record["walk_tq_nm_sd"] for record in summary], dtype=float)
 
-    # Derive foot tilt before independently centering each displayed waveform.
-    # SDs remain unchanged because centering removes only a constant offset.
+    # Derive foot tilt before independently centering the angle waveforms.
+    # SDs remain unchanged because centering removes only a constant offset;
+    # torque remains in its measured Nm reference frame.
     foot_mean = ankle_mean - leg_mean
     foot_sd = np.sqrt(ankle_sd**2 + leg_sd**2)
     ankle_mean = _mean_center(ankle_mean)
@@ -91,6 +96,7 @@ def angle_summary_series(summary: list[dict[str, float]]) -> dict[str, tuple[np.
         "Ankle Joint Angle": (gait_percent, ankle_mean, ankle_sd),
         "Leg Tilt Angle": (gait_percent, leg_mean, leg_sd),
         "Foot Tilt Angle": (gait_percent, foot_mean, foot_sd),
+        "Torque Output": (gait_percent, torque_mean, torque_sd),
     }
 
 
@@ -100,24 +106,29 @@ def _mean_center(values: np.ndarray) -> np.ndarray:
     return values - np.mean(finite_values) if len(finite_values) else values
 
 
-def plot_r_statistic_angles(summary: list[dict[str, float]], output_path: Path) -> bool:
-    """Write a three-panel mean ± sample-SD gait-angle figure."""
-    series = angle_summary_series(summary)
+def plot_r_statistic(summary: list[dict[str, float]], output_path: Path) -> bool:
+    """Write four mean ± sample-SD gait angle and torque panels."""
+    series = statistic_summary_series(summary)
     if not series:
         return False
-    figure, axes = plt.subplots(3, 1, figsize=(7.2, 8.4), sharex=True)
+    figure, axes = plt.subplots(4, 1, figsize=(7.2, 10.4), sharex=True)
+    gait_ticks = (0, 25, 50, 75, 100)
     for axis, (title, (gait_percent, mean, sd)) in zip(axes, series.items()):
         axis.plot(gait_percent, mean, color="#1A1A1A", linewidth=1.8)
         axis.fill_between(gait_percent, mean - sd, mean + sd, color="#4D4D4D", alpha=0.22, linewidth=0)
         axis.axhline(0, color="#7F7F7F", linewidth=0.7)
         axis.set_title(title, loc="left", fontsize=11, fontweight="bold")
-        axis.set_ylabel("Angle (°)")
         axis.set_xlim(0, 100)
-        y_limit = 50 if title == "Foot Tilt Angle" else 30
-        axis.set_ylim(-y_limit, y_limit)
-        axis.set_yticks(tuple(range(-y_limit, y_limit + 1, 15 if y_limit == 30 else 20)))
-        axis.grid(axis="y", color="#D9D9D9", linewidth=0.6)
-    axes[-1].set_xticks((0, 25, 50, 75, 100), labels=("0%", "25%", "50%", "75%", "100%"))
+        axis.set_xticks(gait_ticks)
+        if title == "Torque Output":
+            axis.set_ylabel("Torque Output (Nm)")
+        else:
+            axis.set_ylabel("Angle (°)")
+            y_limit = 50 if title == "Foot Tilt Angle" else 30
+            axis.set_ylim(-y_limit, y_limit)
+            axis.set_yticks(tuple(range(-y_limit, y_limit + 1, 15 if y_limit == 30 else 20)))
+        axis.grid(axis="both", color="#D9D9D9", linewidth=0.6)
+    axes[-1].set_xticks(gait_ticks, labels=("0%", "25%", "50%", "75%", "100%"))
     axes[-1].set_xlabel("Gait cycle (%)")
     figure.tight_layout()
     figure.savefig(output_path, dpi=300, facecolor="white", bbox_inches="tight")

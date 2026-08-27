@@ -30,7 +30,7 @@ from .plotting import (
     create_trial_review,
     open_trial_review,
     plot_normalized,
-    plot_r_statistic_angles,
+    plot_r_statistic,
     process_trial_review_events,
     refresh_trial_review,
     save_trial_review,
@@ -306,7 +306,7 @@ def _run_segment(
             plot_normalized(normalized, [value.strip() for value in plot_channels.split(",")], plot_path)
             console.print(f"Wrote [bold]{plot_path}[/bold]")
             r_statistic_plot_path = artifact_dir / f"{stem}_normalized_cycles_r_statistic.png"
-            if plot_r_statistic_angles(summary, r_statistic_plot_path):
+            if plot_r_statistic(summary, r_statistic_plot_path):
                 console.print(f"Wrote [bold]{r_statistic_plot_path}[/bold]")
     finally:
         close_trial_review(review_window)
