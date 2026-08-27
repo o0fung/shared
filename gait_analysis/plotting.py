@@ -67,43 +67,33 @@ def statistic_summary_series(summary: list[dict[str, float]]) -> dict[str, tuple
     """Return publication angle and torque means with their sample SDs."""
     required = {
         "gait_percent",
-        "walk_pos_rad_mean",
-        "walk_pos_rad_sd",
-        "walk_tilt_forward_deg_mean",
-        "walk_tilt_forward_deg_sd",
+        "ankle_joint_angle_deg_mean",
+        "ankle_joint_angle_deg_sd",
+        "leg_tilt_angle_deg_mean",
+        "leg_tilt_angle_deg_sd",
+        "foot_tilt_angle_deg_mean",
+        "foot_tilt_angle_deg_sd",
         "walk_tq_nm_mean",
         "walk_tq_nm_sd",
     }
     if not summary or not required.issubset(summary[0]):
         return {}
     gait_percent = np.asarray([record["gait_percent"] for record in summary], dtype=float)
-    ankle_mean = np.degrees(np.asarray([record["walk_pos_rad_mean"] for record in summary], dtype=float))
-    ankle_sd = np.degrees(np.asarray([record["walk_pos_rad_sd"] for record in summary], dtype=float))
-    leg_mean = np.asarray([record["walk_tilt_forward_deg_mean"] for record in summary], dtype=float)
-    leg_sd = np.asarray([record["walk_tilt_forward_deg_sd"] for record in summary], dtype=float)
+    ankle_mean = np.asarray([record["ankle_joint_angle_deg_mean"] for record in summary], dtype=float)
+    ankle_sd = np.asarray([record["ankle_joint_angle_deg_sd"] for record in summary], dtype=float)
+    leg_mean = np.asarray([record["leg_tilt_angle_deg_mean"] for record in summary], dtype=float)
+    leg_sd = np.asarray([record["leg_tilt_angle_deg_sd"] for record in summary], dtype=float)
+    foot_mean = np.asarray([record["foot_tilt_angle_deg_mean"] for record in summary], dtype=float)
+    foot_sd = np.asarray([record["foot_tilt_angle_deg_sd"] for record in summary], dtype=float)
     torque_mean = np.asarray([record["walk_tq_nm_mean"] for record in summary], dtype=float)
     torque_sd = np.asarray([record["walk_tq_nm_sd"] for record in summary], dtype=float)
 
-    # Derive foot tilt before independently centering the angle waveforms.
-    # SDs remain unchanged because centering removes only a constant offset;
-    # torque remains in its measured Nm reference frame.
-    foot_mean = ankle_mean - leg_mean
-    foot_sd = np.sqrt(ankle_sd**2 + leg_sd**2)
-    ankle_mean = _mean_center(ankle_mean)
-    leg_mean = _mean_center(leg_mean)
-    foot_mean = _mean_center(foot_mean)
     return {
         "Ankle Joint Angle": (gait_percent, ankle_mean, ankle_sd),
         "Leg Tilt Angle": (gait_percent, leg_mean, leg_sd),
         "Foot Tilt Angle": (gait_percent, foot_mean, foot_sd),
         "Torque Output": (gait_percent, torque_mean, torque_sd),
     }
-
-
-def _mean_center(values: np.ndarray) -> np.ndarray:
-    """Remove the finite-sample average without filling telemetry gaps."""
-    finite_values = values[np.isfinite(values)]
-    return values - np.mean(finite_values) if len(finite_values) else values
 
 
 def plot_r_statistic(summary: list[dict[str, float]], output_path: Path) -> bool:
@@ -124,9 +114,6 @@ def plot_r_statistic(summary: list[dict[str, float]], output_path: Path) -> bool
             axis.set_ylabel("Torque Output (Nm)")
         else:
             axis.set_ylabel("Angle (°)")
-            y_limit = 50 if title == "Foot Tilt Angle" else 30
-            axis.set_ylim(-y_limit, y_limit)
-            axis.set_yticks(tuple(range(-y_limit, y_limit + 1, 15 if y_limit == 30 else 20)))
         axis.grid(axis="both", color="#D9D9D9", linewidth=0.6)
     axes[-1].set_xticks(gait_ticks, labels=("0%", "25%", "50%", "75%", "100%"))
     axes[-1].set_xlabel("Gait cycle (%)")

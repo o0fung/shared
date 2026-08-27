@@ -2,6 +2,8 @@ import json
 import math
 from pathlib import Path
 
+import pytest
+
 from gait_analysis.output import (
     cycle_report,
     load_saved_review_decisions,
@@ -16,17 +18,24 @@ from gait_analysis.segmenter import Cycle, segment_rows
 
 def test_normalizes_continuous_and_discrete_channels() -> None:
     rows = [
-        {"t_ms": "0", "walk_state": "1", "walk_pos_rad": "0.0", "walk_tq_nm": "0.0", "walk_out": "0", "note": ""},
-        {"t_ms": "400", "walk_state": "2", "walk_pos_rad": "1.0", "walk_tq_nm": "1.0", "walk_out": "6", "note": ""},
-        {"t_ms": "800", "walk_state": "5", "walk_pos_rad": "2.0", "walk_tq_nm": "2.0", "walk_out": "1", "note": ""},
-        {"t_ms": "900", "walk_state": "6", "walk_pos_rad": "3.0", "walk_tq_nm": "3.0", "walk_out": "1", "note": ""},
-        {"t_ms": "1200", "walk_state": "7", "walk_pos_rad": "4.0", "walk_tq_nm": "4.0", "walk_out": "3", "note": ""},
-        {"t_ms": "1220", "walk_state": "1", "walk_pos_rad": "5.0", "walk_tq_nm": "5.0", "walk_out": "0", "note": ""},
+        {"t_ms": "0", "walk_state": "1", "walk_pos_rad": "0.0", "walk_tilt_forward_deg": "10.0", "walk_tq_nm": "0.0", "walk_out": "0", "note": ""},
+        {"t_ms": "400", "walk_state": "2", "walk_pos_rad": "1.0", "walk_tilt_forward_deg": "11.0", "walk_tq_nm": "1.0", "walk_out": "6", "note": ""},
+        {"t_ms": "800", "walk_state": "5", "walk_pos_rad": "2.0", "walk_tilt_forward_deg": "12.0", "walk_tq_nm": "2.0", "walk_out": "1", "note": ""},
+        {"t_ms": "900", "walk_state": "6", "walk_pos_rad": "3.0", "walk_tilt_forward_deg": "13.0", "walk_tq_nm": "3.0", "walk_out": "1", "note": ""},
+        {"t_ms": "1200", "walk_state": "7", "walk_pos_rad": "4.0", "walk_tilt_forward_deg": "14.0", "walk_tq_nm": "4.0", "walk_out": "3", "note": ""},
+        {"t_ms": "1220", "walk_state": "1", "walk_pos_rad": "5.0", "walk_tilt_forward_deg": "15.0", "walk_tq_nm": "5.0", "walk_out": "0", "note": ""},
     ]
     fields, records = normalize_cycles(list(rows[0]), rows, segment_rows(rows), points=3)
     assert fields[:2] == ["cycle_index", "gait_percent"]
     assert [record["walk_pos_rad"] for record in records] == [0.0, 1.5, 4.0]
     assert [record["walk_tq_nm"] for record in records] == [0.0, -1.5, -4.0]
+    assert [record["ankle_joint_angle_deg"] for record in records] == pytest.approx(
+        [0.0, -math.degrees(1.5), -math.degrees(4.0)]
+    )
+    assert [record["leg_tilt_angle_deg"] for record in records] == [10.0, 11.5, 14.0]
+    assert [record["foot_tilt_angle_deg"] for record in records] == pytest.approx(
+        [-10.0, -math.degrees(1.5) - 11.5, -math.degrees(4.0) - 14.0]
+    )
     assert {record["walk_state"] for record in records} <= {1, 2, 5, 6, 7}
 
 
@@ -111,6 +120,41 @@ def test_summarizes_continuous_channels_by_gait_percent(tmp_path: Path) -> None:
     assert summary[1]["walk_pos_rad_mean"] == 4.0
     assert math.isnan(summary[1]["walk_pos_rad_sd"])
     assert output_path.read_text(encoding="utf-8").splitlines()[0] == ",".join(summary_fields)
+
+
+def test_summarizes_per_cycle_derived_angles() -> None:
+    fields = [
+        "cycle_index",
+        "gait_percent",
+        "ankle_joint_angle_deg",
+        "leg_tilt_angle_deg",
+        "foot_tilt_angle_deg",
+    ]
+    records = [
+        {"cycle_index": 1, "gait_percent": 0.0, "ankle_joint_angle_deg": -10.0, "leg_tilt_angle_deg": 1.0, "foot_tilt_angle_deg": -11.0},
+        {"cycle_index": 2, "gait_percent": 0.0, "ankle_joint_angle_deg": -20.0, "leg_tilt_angle_deg": 3.0, "foot_tilt_angle_deg": -23.0},
+    ]
+
+    summary_fields, summary = summarize_normalized_cycles(fields, records)
+
+    assert summary_fields == [
+        "gait_percent",
+        "ankle_joint_angle_deg_mean",
+        "ankle_joint_angle_deg_sd",
+        "leg_tilt_angle_deg_mean",
+        "leg_tilt_angle_deg_sd",
+        "foot_tilt_angle_deg_mean",
+        "foot_tilt_angle_deg_sd",
+    ]
+    assert summary == [{
+        "gait_percent": 0.0,
+        "ankle_joint_angle_deg_mean": -15.0,
+        "ankle_joint_angle_deg_sd": math.sqrt(50.0),
+        "leg_tilt_angle_deg_mean": 2.0,
+        "leg_tilt_angle_deg_sd": math.sqrt(2.0),
+        "foot_tilt_angle_deg_mean": -17.0,
+        "foot_tilt_angle_deg_sd": math.sqrt(72.0),
+    }]
 
 
 def _cycle(index: int = 1) -> Cycle:

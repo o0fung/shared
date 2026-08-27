@@ -197,7 +197,12 @@ For an input named `walk.csv`, its matching directory under `output/` contains:
 - `walk_normalized_cycles.csv`: accepted numeric telemetry on a 0–100% grid
   (101 samples by default). Continuous values are linearly interpolated;
   state and identifier-like fields use nearest samples. `walk_tq_nm` uses the
-  inverse of the recorded controller sign in normalized artifacts.
+  inverse of the recorded controller sign in normalized artifacts. When both
+  source channels are available, each normalized cycle row also includes three
+  degree-valued angles: `ankle_joint_angle_deg` is
+  `-degrees(walk_pos_rad)` (dorsiflexion-positive),
+  `leg_tilt_angle_deg` is `walk_tilt_forward_deg`, and
+  `foot_tilt_angle_deg` is ankle joint angle minus leg tilt angle.
 - `walk_normalized_cycles_summary.csv`: one row per gait-percent point, with
   `<channel>_mean` and `<channel>_sd` for each continuous telemetry channel
   across accepted cycles. The SD is the sample standard deviation (`n−1`);
@@ -206,12 +211,10 @@ For an input named `walk.csv`, its matching directory under `output/` contains:
 - `walk_normalized_cycles_r_statistic.png`: publication-style plots of ankle
   joint angle, leg tilt angle, foot tilt angle, and Torque Output (Nm). Each
   panel uses a solid mean with a shaded mean ± sample-SD band and a 0–100%
-  gait-cycle x-axis. Angle panels have fixed −30° to +30° ranges, except foot
-  tilt which uses −50° to +50°; Torque Output uses automatic Nm scaling. Ankle
-  angle converts `walk_pos_rad` to degrees; foot tilt is ankle angle minus leg
-  tilt, with SD calculated by independent error propagation. Each displayed
-  angle waveform is independently mean-centered across the gait cycle; its SD
-  band is unchanged. Torque Output uses the inverted normalized-torque sign.
+  gait-cycle x-axis and automatic y-axis scaling. The three angle panels
+  directly plot their corresponding normalized-summary mean and SD columns,
+  without inversion, baseline removal, or error propagation during plotting.
+  Torque Output uses the inverted normalized-torque sign.
 - `walk_normalized_cycles.png`: white-background stacked overlays and mean for
   selected channels.
 

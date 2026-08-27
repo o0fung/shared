@@ -19,6 +19,11 @@ DISCRETE_COLUMNS = {
 IDENTIFIER_COLUMNS = {"t_ms", "frame_fid", "walk_fid", "cfg_fid", "note", "packet_type", "source_mode"}
 REVIEW_DECISIONS = {"forced_accept", "forced_reject"}
 NORMALIZED_SIGN_INVERTED_COLUMNS = {"walk_tq_nm"}
+DERIVED_ANGLE_COLUMNS = (
+    "ankle_joint_angle_deg",
+    "leg_tilt_angle_deg",
+    "foot_tilt_angle_deg",
+)
 
 
 @dataclass(frozen=True)
@@ -222,6 +227,7 @@ def normalize_cycles(
     if points < 2:
         raise ValueError("points must be at least 2")
     columns = _numeric_columns(headers, rows)
+    angle_sources_available = {"walk_pos_rad", "walk_tilt_forward_deg"}.issubset(columns)
     percent = np.linspace(0.0, 100.0, points)
     normalized: list[dict[str, float | int]] = []
     for cycle in cycles:
@@ -246,8 +252,22 @@ def normalize_cycles(
                     # Normalized torque uses the analysis convention opposite to
                     # the recorded controller sign; raw telemetry is unchanged.
                     record[column] = -value if column in NORMALIZED_SIGN_INVERTED_COLUMNS else value
+            # Derive angles only after both source channels have been resampled
+            # for this cycle and gait-percent point. This applies the
+            # dorsiflexion-positive inversion once and preserves the per-cycle
+            # ankle-minus-leg relationship for later summary statistics.
+            if angle_sources_available and {
+                "walk_pos_rad",
+                "walk_tilt_forward_deg",
+            }.issubset(record):
+                ankle_joint_angle = -float(np.degrees(record["walk_pos_rad"]))
+                leg_tilt_angle = float(record["walk_tilt_forward_deg"])
+                record["ankle_joint_angle_deg"] = ankle_joint_angle
+                record["leg_tilt_angle_deg"] = leg_tilt_angle
+                record["foot_tilt_angle_deg"] = ankle_joint_angle - leg_tilt_angle
             normalized.append(record)
-    return ["cycle_index", "gait_percent", *columns], normalized
+    derived_columns = DERIVED_ANGLE_COLUMNS if angle_sources_available else ()
+    return ["cycle_index", "gait_percent", *columns, *derived_columns], normalized
 
 
 def write_normalized(output_dir: Path, stem: str, fields: list[str], records: list[dict[str, float | int]]) -> Path:

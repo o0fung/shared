@@ -66,23 +66,27 @@ def test_trial_review_shading_keeps_incomplete_cycle_status_visible() -> None:
     close_trial_review(review)
 
 
-def test_creates_r_statistic_plot_with_inverted_torque_and_x_grid(tmp_path, monkeypatch) -> None:
+def test_creates_r_statistic_plot_from_direct_angle_summary(tmp_path, monkeypatch) -> None:
     summary = [
         {
             "gait_percent": 0.0,
-            "walk_pos_rad_mean": 0.5235987755982988,
-            "walk_pos_rad_sd": 0.17453292519943295,
-            "walk_tilt_forward_deg_mean": 5.0,
-            "walk_tilt_forward_deg_sd": 2.0,
+            "ankle_joint_angle_deg_mean": -30.0,
+            "ankle_joint_angle_deg_sd": 10.0,
+            "leg_tilt_angle_deg_mean": 5.0,
+            "leg_tilt_angle_deg_sd": 2.0,
+            "foot_tilt_angle_deg_mean": -35.0,
+            "foot_tilt_angle_deg_sd": 4.0,
             "walk_tq_nm_mean": -12.0,
             "walk_tq_nm_sd": 1.5,
         },
         {
             "gait_percent": 100.0,
-            "walk_pos_rad_mean": 0.8726646259971648,
-            "walk_pos_rad_sd": 0.2617993877991494,
-            "walk_tilt_forward_deg_mean": 7.0,
-            "walk_tilt_forward_deg_sd": 3.0,
+            "ankle_joint_angle_deg_mean": -50.0,
+            "ankle_joint_angle_deg_sd": 15.0,
+            "leg_tilt_angle_deg_mean": 7.0,
+            "leg_tilt_angle_deg_sd": 3.0,
+            "foot_tilt_angle_deg_mean": -57.0,
+            "foot_tilt_angle_deg_sd": 5.0,
             "walk_tq_nm_mean": -15.0,
             "walk_tq_nm_sd": 2.5,
         },
@@ -91,11 +95,11 @@ def test_creates_r_statistic_plot_with_inverted_torque_and_x_grid(tmp_path, monk
 
     series = statistic_summary_series(summary)
 
-    assert series["Ankle Joint Angle"][1].mean() == pytest.approx(0.0)
-    assert series["Leg Tilt Angle"][1].mean() == pytest.approx(0.0)
-    assert series["Foot Tilt Angle"][1].mean() == pytest.approx(0.0)
+    assert series["Ankle Joint Angle"][1].tolist() == pytest.approx([-30.0, -50.0])
+    assert series["Leg Tilt Angle"][1].tolist() == [5.0, 7.0]
+    assert series["Foot Tilt Angle"][1].tolist() == [-35.0, -57.0]
     assert series["Ankle Joint Angle"][2][0] == pytest.approx(10.0)
-    assert series["Foot Tilt Angle"][2][0] == pytest.approx(104**0.5)
+    assert series["Foot Tilt Angle"][2].tolist() == [4.0, 5.0]
     assert series["Torque Output"][1].tolist() == [-12.0, -15.0]
     assert series["Torque Output"][2].tolist() == [1.5, 2.5]
     close_figure = plt.close
@@ -103,6 +107,14 @@ def test_creates_r_statistic_plot_with_inverted_torque_and_x_grid(tmp_path, monk
     assert plot_r_statistic(summary, output_path)
     figure = plt.gcf()
     assert len(figure.axes) == 4
+    for axis, (minimum, maximum) in zip(
+        figure.axes[:3],
+        [(-65.0, -20.0), (3.0, 10.0), (-62.0, -31.0)],
+        strict=True,
+    ):
+        lower, upper = axis.get_ylim()
+        assert lower <= minimum
+        assert upper >= maximum
     for axis in figure.axes:
         assert axis.get_xticks().tolist() == [0, 25, 50, 75, 100]
         assert all(line.get_visible() for line in axis.get_xgridlines())
