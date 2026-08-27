@@ -1,0 +1,10 @@
+{
+  "slope_degrees_per_ms": 0.001437045769388711,
+  "slope_degrees_per_s": 1.437045769388711,
+  "intercept_degrees": 11.159294853031673,
+  "reference_time_ms": 0.0,
+  "fitted_sample_count": 705,
+  "formula": "detrended = (raw - slope_degrees_per_ms * (Time - reference_time_ms) - detrended_mean_offset_degrees) * ankle_joint_scale",
+  "detrended_mean_offset_degrees": 11.159294853031673,
+  "ankle_joint_scale": 1.0
+}

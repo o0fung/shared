@@ -35,6 +35,64 @@ bounds, timestamps, and state path against the current segmentation; unmatched
 decisions are skipped. Automatic decisions are recalculated, and choices made
 with the current prompts or `--accept`/`--reject` options take precedence.
 
+## Compute coordinate angles
+
+Use `review-coordinates` for Akr/Yrobot coordinate CSVs containing ankle, foot,
+and knee X/Y columns:
+
+```sh
+gait-analyze review-coordinates \
+  "data/Joint coordinates/P1 ZGJ/test Akr_ZGJ LEFT_P1.csv"
+```
+
+Use `--start-index N` to exclude noisy leading samples. `N` is one-based,
+counts data rows only (not the CSV header), and defaults to `1`. The selected
+row and every row after it are filtered and exported; the selected row's
+`Time` becomes the ankle-angle detrending reference.
+
+Use `--ankle-joint-scale VALUE` to multiply the final centered, detrended ankle
+joint angle. It defaults to `1`.
+
+The command copies the source rows and appends filtered coordinate and computed
+angle columns to `<stem>_computed_angles.csv`. The ankle is the shared origin;
+x is right and y is up:
+
+- `leg_tilt_angle`: the inverted clockwise rotation from vertical to
+  ankle→knee;
+- `foot_tilt_angle`: the continuous, inverted clockwise rotation from vertical
+  to ankle→foot, offset by -90°. This uses the same convention as
+  `leg_tilt_angle`; the tilt is unwrapped across adjacent samples before
+  inversion, so it can pass ±180° without a 360° jump;
+- `ankle_joint_angle`: `foot_tilt_angle - leg_tilt_angle`, wrapped to
+  `[-180, 180)`.
+
+If a foot or leg vector has zero length, its undefined derived angles are left
+blank and the command reports the affected row count.
+
+Before deriving these angles, each ankle, foot, and knee X/Y coordinate is
+smoothed independently with a centered five-sample moving average. The first
+and last values are edge-padded, so every row receives a filtered value without
+a phase shift. Six `*_filtered` coordinate columns are appended after the raw
+source columns; the angle calculations use those filtered values only.
+
+`ankle_joint_angle_trend` is an ordinary least-squares fit of the raw ankle
+joint angle against `Time`. `ankle_joint_angle_detrended` removes the slope,
+then subtracts the mean residual so its average is zero, before applying the
+requested scale:
+
+```text
+detrended = (
+  ankle_joint_angle
+  - slope_degrees_per_ms × (Time - first_Time)
+  - mean_detrended_residual
+) × ankle_joint_scale
+```
+
+The companion `<stem>_computed_angles.json` records the slope, intercept,
+reference time, removed mean offset, applied scale, fitted sample count, and
+formula. The raw angle remains in the CSV because a trend can reflect real
+movement as well as camera or pose drift.
+
 ## Causal state model
 
 The UPDATE gait model defines states 0–7, but the recorded firmware compresses
@@ -105,3 +163,9 @@ For an input named `walk.csv`, its matching directory under `output/` contains:
 
 The input CSV is never modified or copied. CSV inputs must be located under
 `data/`.
+
+For a coordinate input named `angles.csv`, the matching output directory
+contains `angles_computed_angles.csv`: the original source columns in their
+original order followed by six filtered-coordinate columns and five computed
+and detrended angle columns. Its matching `angles_computed_angles.json` records
+the ankle-angle regression.

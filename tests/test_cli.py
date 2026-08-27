@@ -29,6 +29,17 @@ def test_artifact_dir_mirrors_supplementary_data_parent(tmp_path: Path, monkeypa
     assert cli._artifact_dir(csv_file) == tmp_path / "output" / "Joint coordinates" / "P1 ZGJ"
 
 
+def test_artifact_dir_uses_input_data_root_when_called_from_nested_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    csv_file = tmp_path / "data" / "Joint coordinates" / "P1 ZGJ" / "test Akr_ZGJ LEFT_P1.csv"
+    csv_file.parent.mkdir(parents=True)
+    csv_file.touch()
+    monkeypatch.chdir(csv_file.parent)
+
+    assert cli._artifact_dir(Path(csv_file.name)) == tmp_path / "output" / "Joint coordinates" / "P1 ZGJ"
+
+
 def test_artifact_dir_rejects_csv_outside_data(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     csv_file = tmp_path / "outside.csv"
     csv_file.touch()

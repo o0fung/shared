@@ -1,4 +1,4 @@
-"""Typer command line interface for causal gait-cycle review."""
+"""Typer commands for gait-cycle review and coordinate-angle calculation."""
 
 from __future__ import annotations
 
@@ -30,6 +30,7 @@ from .plotting import (
     refresh_trial_review,
     save_trial_review,
 )
+from .coordinates import CoordinateCsv, write_computed_angles
 from .segmenter import (
     QUALITY_ACCEPTED,
     QUALITY_REJECTED,
@@ -38,7 +39,7 @@ from .segmenter import (
     segment_rows,
 )
 
-app = typer.Typer(help="Causally segment and normalize rr_app walk CSV files.")
+app = typer.Typer(help="Segment rr_app walk CSVs and derive coordinate angles.")
 console = Console()
 PromptValue = TypeVar("PromptValue")
 
@@ -67,13 +68,16 @@ def _parse_indices(value: str) -> set[int]:
 
 
 def _artifact_dir(csv_file: Path) -> Path:
-    """Mirror an input CSV's parent directory from data/ into output/."""
-    data_root = Path("data").resolve()
-    try:
-        relative_parent = csv_file.resolve().parent.relative_to(data_root)
-    except ValueError as error:
-        raise typer.BadParameter(f"CSV must be located under {data_root}", param_hint="csv_file") from error
-    return Path("output").resolve() / relative_parent
+    """Mirror an input parent beneath its enclosing data/ directory into output/."""
+    resolved_file = csv_file.resolve()
+    # Commands can be launched from a data subdirectory. Find the nearest
+    # enclosing data root from the input path rather than interpreting data/
+    # relative to the shell's current working directory.
+    data_root = next((parent for parent in resolved_file.parents if parent.name == "data"), None)
+    if data_root is None:
+        raise typer.BadParameter("CSV must be located under a data directory", param_hint="csv_file")
+    relative_parent = resolved_file.parent.relative_to(data_root)
+    return data_root.parent / "output" / relative_parent
 
 
 def _prompt_while_review_open(prompt: Callable[[], PromptValue], review_window: object | None) -> PromptValue:
@@ -271,6 +275,31 @@ def segment(
             console.print(f"Wrote [bold]{plot_path}[/bold]")
     finally:
         close_trial_review(review_window)
+
+
+@app.command()
+def review_coordinates(
+    csv_file: Path = typer.Argument(..., exists=True, readable=True, help="Coordinate CSV with ankle, foot, and knee X/Y columns."),
+    start_index: int = typer.Option(1, min=1, help="One-based first data-row index to include."),
+    ankle_joint_scale: float = typer.Option(1.0, help="Final multiplier for the centered detrended ankle joint angle."),
+) -> None:
+    """Append signed leg, foot, and ankle-joint angles to a coordinate CSV."""
+    try:
+        source = CoordinateCsv.from_csv(csv_file, start_index=start_index)
+    except ValueError as error:
+        raise typer.BadParameter(str(error), param_hint="csv_file") from error
+    artifact_dir = _artifact_dir(csv_file)
+    try:
+        output_path, metadata_path, undefined_rows = write_computed_angles(
+            artifact_dir,
+            csv_file.stem,
+            source,
+            ankle_joint_scale,
+        )
+    except ValueError as error:
+        raise typer.BadParameter(str(error), param_hint="--ankle-joint-scale") from error
+    warning = f"; {undefined_rows} row(s) had a zero-length segment" if undefined_rows else ""
+    console.print(f"Wrote [bold]{output_path}[/bold] and {metadata_path}{warning}")
 
 
 if __name__ == "__main__":
