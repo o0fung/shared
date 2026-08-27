@@ -351,6 +351,10 @@ def segment_rows(
         if state == last_state:
             if candidate is not None:
                 _record_walk_out(candidate, row)
+                if state == 7:
+                    # Preserve all MID_SWING telemetry for normalization. The
+                    # following contact still closes timing but starts the next cycle.
+                    candidate.end_row = row_number
             last_timestamp = timestamp
             continue
 

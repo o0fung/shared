@@ -93,6 +93,45 @@ reference time, removed mean offset, applied scale, fitted sample count, and
 formula. The raw angle remains in the CSV because a trend can reflect real
 movement as well as camera or pose drift.
 
+## Bulk processing
+
+Use `bulk` to run `segment` and `review-coordinates` jobs from one JSON
+manifest. Start from [`bulk_manifest.template.json`](bulk_manifest.template.json)
+and edit the paths and optional per-file settings:
+
+```json
+{
+  "segment": [
+    "data/session/walk_01.csv",
+    {"csv_file": "data/session/walk_02.csv", "options": {"points": 51, "no_plot": true}}
+  ],
+  "review-coordinates": [
+    {"csv_file": "data/session/coordinates.csv", "options": {"start_index": 3}}
+  ]
+}
+```
+
+Each command group is optional and contains path strings or objects with
+`csv_file` and an `options` object. Paths can be absolute or relative to the
+manifest file's directory. Run both groups with:
+
+```sh
+gait-analyze bulk batches/analysis.json --cluster-min-cycles 5
+```
+
+CLI options are the defaults for every job, and a file's `options` override
+only that file. `segment` supports `points`, `accept`, `reject`, `no_plot`,
+`plot_channels`, `robust_z_max`, `cluster_log_duration_tolerance`,
+`cluster_stance_percent_tolerance`, and `cluster_min_cycles`.
+`review-coordinates` supports `start_index` and `ankle_joint_scale`.
+Segment jobs always run before coordinate jobs, preserving the order within
+each group.
+Bulk segmentation is always non-interactive: it writes the same review and
+normalized artifacts as `segment --yes --no-show-review-plot` without opening
+plots or asking for confirmation. Each source is reported as it starts and
+finishes. Failed files are reported in the final summary, but do not stop later
+jobs; the command exits with status `1` if any job fails.
+
 ## Causal state model
 
 The UPDATE gait model defines states 0–7, but the recorded firmware compresses
@@ -158,6 +197,19 @@ For an input named `walk.csv`, its matching directory under `output/` contains:
 - `walk_normalized_cycles.csv`: accepted numeric telemetry on a 0–100% grid
   (101 samples by default). Continuous values are linearly interpolated;
   state and identifier-like fields use nearest samples.
+- `walk_normalized_cycles_summary.csv`: one row per gait-percent point, with
+  `<channel>_mean` and `<channel>_sd` for each continuous telemetry channel
+  across accepted cycles. The SD is the sample standard deviation (`n−1`);
+  it is `NaN` when only one cycle contributes. Identifier and discrete fields
+  are excluded because their numeric encodings are not meaningful averages.
+- `walk_normalized_cycles_r_statistic.png`: publication-style plots of ankle
+  joint angle, leg tilt angle, and foot tilt angle. Each panel uses a solid
+  mean with a shaded mean ± sample-SD band, a 0–100% gait-cycle x-axis, and a
+  fixed −30° to +30° y-axis, except foot tilt which uses −50° to +50°. Ankle
+  angle converts `walk_pos_rad` to degrees; foot tilt is ankle angle minus leg
+  tilt, with SD calculated by independent error propagation. Each displayed
+  angle waveform is independently mean-centered across the gait cycle; its SD
+  band is unchanged.
 - `walk_normalized_cycles.png`: white-background stacked overlays and mean for
   selected channels.
 

@@ -253,3 +253,45 @@ def write_normalized(output_dir: Path, stem: str, fields: list[str], records: li
         writer.writeheader()
         writer.writerows(records)
     return path
+
+
+def summarize_normalized_cycles(
+    fields: list[str], records: list[dict[str, float | int]]
+) -> tuple[list[str], list[dict[str, float]]]:
+    """Calculate continuous-channel mean and sample SD at each gait-percent point."""
+    channels = [
+        field
+        for field in fields
+        if field not in {"cycle_index", "gait_percent", *IDENTIFIER_COLUMNS, *DISCRETE_COLUMNS}
+    ]
+    summary_fields = ["gait_percent", *(f"{channel}_{statistic}" for channel in channels for statistic in ("mean", "sd"))]
+    records_by_percent: dict[float, list[dict[str, float | int]]] = {}
+    for record in records:
+        gait_percent = float(record["gait_percent"])
+        records_by_percent.setdefault(gait_percent, []).append(record)
+
+    summary: list[dict[str, float]] = []
+    for gait_percent, cycle_records in sorted(records_by_percent.items()):
+        result: dict[str, float] = {"gait_percent": gait_percent}
+        for channel in channels:
+            values = np.array(
+                [float(record.get(channel, np.nan)) for record in cycle_records],
+                dtype=float,
+            )
+            values = values[np.isfinite(values)]
+            result[f"{channel}_mean"] = float(np.mean(values)) if len(values) else np.nan
+            result[f"{channel}_sd"] = float(np.std(values, ddof=1)) if len(values) > 1 else np.nan
+        summary.append(result)
+    return summary_fields, summary
+
+
+def write_normalized_summary(
+    output_dir: Path, stem: str, fields: list[str], records: list[dict[str, float]]
+) -> Path:
+    """Write the per-gait-percent continuous-channel summary artifact."""
+    path = output_dir / f"{stem}_normalized_cycles_summary.csv"
+    with path.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=fields, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(records)
+    return path

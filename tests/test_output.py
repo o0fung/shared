@@ -1,4 +1,5 @@
 import json
+import math
 from pathlib import Path
 
 from gait_analysis.output import (
@@ -6,6 +7,8 @@ from gait_analysis.output import (
     load_saved_review_decisions,
     normalize_cycles,
     restore_saved_review_decisions,
+    summarize_normalized_cycles,
+    write_normalized_summary,
     write_review,
 )
 from gait_analysis.segmenter import Cycle, segment_rows
@@ -24,6 +27,24 @@ def test_normalizes_continuous_and_discrete_channels() -> None:
     assert fields[:2] == ["cycle_index", "gait_percent"]
     assert [record["walk_pos_rad"] for record in records] == [0.0, 1.5, 4.0]
     assert {record["walk_state"] for record in records} <= {1, 2, 5, 6, 7}
+
+
+def test_normalization_ends_at_last_mid_swing_sample() -> None:
+    rows = [
+        {"t_ms": "0", "walk_state": "1", "walk_pos_rad": "0.0", "walk_out": "0", "note": ""},
+        {"t_ms": "400", "walk_state": "2", "walk_pos_rad": "1.0", "walk_out": "6", "note": ""},
+        {"t_ms": "800", "walk_state": "5", "walk_pos_rad": "2.0", "walk_out": "1", "note": ""},
+        {"t_ms": "900", "walk_state": "6", "walk_pos_rad": "3.0", "walk_out": "1", "note": ""},
+        {"t_ms": "1200", "walk_state": "7", "walk_pos_rad": "4.0", "walk_out": "3", "note": ""},
+        {"t_ms": "1210", "walk_state": "7", "walk_pos_rad": "5.0", "walk_out": "3", "note": ""},
+        {"t_ms": "1220", "walk_state": "1", "walk_pos_rad": "6.0", "walk_out": "0", "note": ""},
+    ]
+
+    _, records = normalize_cycles(list(rows[0]), rows, segment_rows(rows), points=3)
+
+    assert records[-1]["gait_percent"] == 100.0
+    assert records[-1]["walk_pos_rad"] == 5.0
+    assert records[-1]["walk_state"] == 7
 
 
 def test_cycle_report_uses_state_ranges_for_phase_durations() -> None:
@@ -66,6 +87,29 @@ def test_normalization_excludes_duration_only_transition_steps() -> None:
     _, records = normalize_cycles(list(rows[0]), rows, segment_rows(rows), points=3)
 
     assert {record["cycle_index"] for record in records} == {2}
+
+
+def test_summarizes_continuous_channels_by_gait_percent(tmp_path: Path) -> None:
+    fields = ["cycle_index", "gait_percent", "walk_pos_rad", "walk_state", "walk_out"]
+    records = [
+        {"cycle_index": 1, "gait_percent": 0.0, "walk_pos_rad": 1.0, "walk_state": 1, "walk_out": 0},
+        {"cycle_index": 2, "gait_percent": 0.0, "walk_pos_rad": 3.0, "walk_state": 2, "walk_out": 6},
+        {"cycle_index": 1, "gait_percent": 100.0, "walk_pos_rad": 4.0, "walk_state": 7, "walk_out": 3},
+    ]
+
+    summary_fields, summary = summarize_normalized_cycles(fields, records)
+    output_path = write_normalized_summary(tmp_path, "walk", summary_fields, summary)
+
+    assert summary_fields == ["gait_percent", "walk_pos_rad_mean", "walk_pos_rad_sd"]
+    assert summary[0] == {
+        "gait_percent": 0.0,
+        "walk_pos_rad_mean": 2.0,
+        "walk_pos_rad_sd": math.sqrt(2.0),
+    }
+    assert summary[1]["gait_percent"] == 100.0
+    assert summary[1]["walk_pos_rad_mean"] == 4.0
+    assert math.isnan(summary[1]["walk_pos_rad_sd"])
+    assert output_path.read_text(encoding="utf-8").splitlines()[0] == ",".join(summary_fields)
 
 
 def _cycle(index: int = 1) -> Cycle:

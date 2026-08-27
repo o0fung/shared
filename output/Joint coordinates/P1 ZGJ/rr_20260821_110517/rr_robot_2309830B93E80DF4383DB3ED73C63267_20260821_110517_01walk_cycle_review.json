@@ -89,7 +89,7 @@
   {
     "cycle_index": 4,
     "start_row": 189,
-    "end_row": 319,
+    "end_row": 367,
     "start_ms": 3780.0,
     "end_ms": 7380.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -118,7 +118,7 @@
   {
     "cycle_index": 5,
     "start_row": 368,
-    "end_row": 475,
+    "end_row": 514,
     "start_ms": 7380.0,
     "end_ms": 10300.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -147,7 +147,7 @@
   {
     "cycle_index": 6,
     "start_row": 515,
-    "end_row": 606,
+    "end_row": 615,
     "start_ms": 10300.0,
     "end_ms": 12320.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -176,7 +176,7 @@
   {
     "cycle_index": 7,
     "start_row": 616,
-    "end_row": 699,
+    "end_row": 702,
     "start_ms": 12320.0,
     "end_ms": 14060.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -205,7 +205,7 @@
   {
     "cycle_index": 8,
     "start_row": 703,
-    "end_row": 821,
+    "end_row": 828,
     "start_ms": 14060.0,
     "end_ms": 16580.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -234,7 +234,7 @@
   {
     "cycle_index": 9,
     "start_row": 829,
-    "end_row": 990,
+    "end_row": 998,
     "start_ms": 16580.0,
     "end_ms": 19980.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -263,7 +263,7 @@
   {
     "cycle_index": 10,
     "start_row": 999,
-    "end_row": 1171,
+    "end_row": 1185,
     "start_ms": 19980.0,
     "end_ms": 23720.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -292,7 +292,7 @@
   {
     "cycle_index": 11,
     "start_row": 1186,
-    "end_row": 1363,
+    "end_row": 1376,
     "start_ms": 23720.0,
     "end_ms": 27560.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -321,7 +321,7 @@
   {
     "cycle_index": 12,
     "start_row": 1377,
-    "end_row": 1540,
+    "end_row": 1549,
     "start_ms": 27560.0,
     "end_ms": 31020.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -350,7 +350,7 @@
   {
     "cycle_index": 13,
     "start_row": 1550,
-    "end_row": 1760,
+    "end_row": 1771,
     "start_ms": 31020.0,
     "end_ms": 35440.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -379,7 +379,7 @@
   {
     "cycle_index": 14,
     "start_row": 1772,
-    "end_row": 1830,
+    "end_row": 1831,
     "start_ms": 35440.0,
     "end_ms": 36640.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -437,7 +437,7 @@
   {
     "cycle_index": 16,
     "start_row": 2026,
-    "end_row": 2128,
+    "end_row": 2139,
     "start_ms": 40520.0,
     "end_ms": 42840.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -466,7 +466,7 @@
   {
     "cycle_index": 17,
     "start_row": 2140,
-    "end_row": 2196,
+    "end_row": 2197,
     "start_ms": 42840.0,
     "end_ms": 43980.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -495,7 +495,7 @@
   {
     "cycle_index": 18,
     "start_row": 2198,
-    "end_row": 2321,
+    "end_row": 2330,
     "start_ms": 43980.0,
     "end_ms": 46620.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -524,7 +524,7 @@
   {
     "cycle_index": 19,
     "start_row": 2331,
-    "end_row": 2507,
+    "end_row": 2517,
     "start_ms": 46620.0,
     "end_ms": 50380.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -553,7 +553,7 @@
   {
     "cycle_index": 20,
     "start_row": 2518,
-    "end_row": 2572,
+    "end_row": 2581,
     "start_ms": 50380.0,
     "end_ms": 51640.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -611,7 +611,7 @@
   {
     "cycle_index": 22,
     "start_row": 2733,
-    "end_row": 2823,
+    "end_row": 2824,
     "start_ms": 54660.0,
     "end_ms": 56500.0,
     "state_path": "0\u21922\u21925\u21926\u21927",
@@ -628,19 +628,19 @@
     "stance_percent": 95.65217391304348,
     "swing_percent": 4.3478260869565215,
     "has_full_phase_timing": true,
-    "cluster_size": 7,
-    "cluster_stance_median_ms": 3140.0000000000027,
-    "cluster_swing_median_ms": 540.0000000000002,
-    "cluster_stance_percent_median": 84.39306358381504,
+    "cluster_size": null,
+    "cluster_stance_median_ms": null,
+    "cluster_swing_median_ms": null,
+    "cluster_stance_percent_median": null,
     "quality_status": "review",
     "accepted": false,
     "user_decision": "auto",
-    "reason": "timing review required: log_stance_ms robust z=-5.4; log_swing_ms robust z=-12.2; stance_percent robust z=7.2"
+    "reason": "full cycle immediately follows T50 transition and requires review"
   },
   {
     "cycle_index": 23,
     "start_row": 2825,
-    "end_row": 3007,
+    "end_row": 3009,
     "start_ms": 56500.0,
     "end_ms": 60200.0,
     "state_path": "1\u21922\u21925\u21926\u21927",

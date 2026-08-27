@@ -3,10 +3,14 @@ from pathlib import Path
 
 import pytest
 import typer
+from typer.testing import CliRunner
 
 from gait_analysis import cli
 from gait_analysis.output import SavedReviewDecision, restore_saved_review_decisions
 from gait_analysis.segmenter import Cycle
+
+
+runner = CliRunner()
 
 
 def test_artifact_dir_mirrors_nested_data_parent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -145,3 +149,132 @@ def test_current_forced_decision_overrides_restored_decision() -> None:
         "forced_accept",
         "accepted by user",
     )
+
+
+def test_load_bulk_jobs_resolves_paths_and_supports_per_file_options(tmp_path: Path) -> None:
+    walk_csv = tmp_path / "data" / "walk.csv"
+    coordinates_csv = tmp_path / "data" / "coordinates.csv"
+    walk_csv.parent.mkdir()
+    walk_csv.touch()
+    coordinates_csv.touch()
+    manifest = tmp_path / "jobs.json"
+    manifest.write_text(
+        """{
+          "segment": ["data/walk.csv"],
+          "review-coordinates": [
+            {"csv_file": "data/coordinates.csv", "options": {"start_index": 3}}
+          ]
+        }""",
+        encoding="utf-8",
+    )
+
+    assert cli._load_bulk_jobs(manifest) == [
+        cli.BulkJob("segment", walk_csv.resolve(), {}),
+        cli.BulkJob("review-coordinates", coordinates_csv.resolve(), {"start_index": 3}),
+    ]
+
+
+@pytest.mark.parametrize(
+    "contents",
+    [
+        "[]",
+        "{}",
+        '{"unknown": []}',
+        '{"segment": "data/walk.csv"}',
+        '{"segment": [42]}',
+        '{"segment": [{"options": {}}]}',
+        '{"segment": [{"csv_file": "data/walk.csv", "options": {"unknown": true}}]}',
+        '{"segment": [{"csv_file": "data/walk.csv", "options": {"points": 1}}]}',
+    ],
+)
+def test_load_bulk_jobs_rejects_invalid_manifest_shapes(tmp_path: Path, contents: str) -> None:
+    manifest = tmp_path / "jobs.json"
+    manifest.write_text(contents, encoding="utf-8")
+
+    with pytest.raises(typer.BadParameter):
+        cli._load_bulk_jobs(manifest)
+
+
+def test_load_bulk_jobs_rejects_invalid_json(tmp_path: Path) -> None:
+    manifest = tmp_path / "jobs.json"
+    manifest.write_text("[", encoding="utf-8")
+
+    with pytest.raises(typer.BadParameter, match="invalid JSON"):
+        cli._load_bulk_jobs(manifest)
+
+
+def test_bulk_runs_command_groups_in_order_and_overrides_file_options(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    paths = {name: data_dir / f"{name}.csv" for name in ("walk_01", "walk_02", "coordinates_01", "coordinates_02")}
+    for path in paths.values():
+        path.touch()
+    manifest = tmp_path / "jobs.json"
+    manifest.write_text(
+        """{
+          "segment": [
+            "data/walk_01.csv",
+            {"csv_file": "data/walk_02.csv", "options": {"points": 51, "no_plot": true}}
+          ],
+          "review-coordinates": [
+            "data/coordinates_01.csv",
+            {"csv_file": "data/coordinates_02.csv", "options": {"start_index": 4, "ankle_joint_scale": 0.8}}
+          ]
+        }""",
+        encoding="utf-8",
+    )
+    calls: list[tuple[str, Path, dict[str, object]]] = []
+    monkeypatch.setattr(cli, "_run_segment", lambda path, **kwargs: calls.append(("segment", path, kwargs)))
+    monkeypatch.setattr(
+        cli,
+        "_run_review_coordinates",
+        lambda path, **kwargs: calls.append(("review-coordinates", path, kwargs)),
+    )
+
+    result = runner.invoke(cli.app, ["bulk", str(manifest), "--points", "25", "--start-index", "2"])
+
+    assert result.exit_code == 0, result.output
+    assert [(command, path) for command, path, _ in calls] == [
+        ("segment", paths["walk_01"].resolve()),
+        ("segment", paths["walk_02"].resolve()),
+        ("review-coordinates", paths["coordinates_01"].resolve()),
+        ("review-coordinates", paths["coordinates_02"].resolve()),
+    ]
+    assert calls[0][2]["points"] == 25
+    assert calls[1][2]["points"] == 51
+    assert calls[1][2]["no_plot"] is True
+    assert calls[0][2]["yes"] is True
+    assert calls[0][2]["no_show_review_plot"] is True
+    assert calls[2][2] == {"start_index": 2, "ankle_joint_scale": 1.0}
+    assert calls[3][2] == {"start_index": 4, "ankle_joint_scale": 0.8}
+    assert "Completed 4/4 job(s); 0 failed." in result.output
+
+
+def test_bulk_continues_after_processing_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    first_csv = tmp_path / "data" / "first.csv"
+    second_csv = tmp_path / "data" / "second.csv"
+    first_csv.parent.mkdir()
+    first_csv.touch()
+    second_csv.touch()
+    manifest = tmp_path / "jobs.json"
+    manifest.write_text(
+        '{"review-coordinates": ["data/first.csv", "data/second.csv"]}',
+        encoding="utf-8",
+    )
+    calls: list[Path] = []
+
+    def run_coordinate_review(path: Path, **_: object) -> None:
+        calls.append(path)
+        if path == first_csv.resolve():
+            raise RuntimeError("processing failed")
+
+    monkeypatch.setattr(cli, "_run_review_coordinates", run_coordinate_review)
+
+    result = runner.invoke(cli.app, ["bulk", str(manifest)])
+
+    assert result.exit_code == 1, result.output
+    assert calls == [first_csv.resolve(), second_csv.resolve()]
+    assert "processing failed" in result.output
+    assert "Completed 1/2 job(s); 1 failed." in result.output

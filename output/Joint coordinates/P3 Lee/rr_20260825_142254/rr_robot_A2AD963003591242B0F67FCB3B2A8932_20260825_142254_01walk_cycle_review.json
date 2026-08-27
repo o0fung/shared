@@ -31,7 +31,7 @@
   {
     "cycle_index": 2,
     "start_row": 1237,
-    "end_row": 1597,
+    "end_row": 1615,
     "start_ms": 24760.0,
     "end_ms": 32340.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -60,7 +60,7 @@
   {
     "cycle_index": 3,
     "start_row": 1616,
-    "end_row": 1672,
+    "end_row": 1705,
     "start_ms": 32340.0,
     "end_ms": 34120.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -89,7 +89,7 @@
   {
     "cycle_index": 4,
     "start_row": 1706,
-    "end_row": 1811,
+    "end_row": 1825,
     "start_ms": 34120.0,
     "end_ms": 36520.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -118,7 +118,7 @@
   {
     "cycle_index": 5,
     "start_row": 1826,
-    "end_row": 1896,
+    "end_row": 1903,
     "start_ms": 36520.0,
     "end_ms": 38080.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -139,15 +139,15 @@
     "cluster_stance_median_ms": null,
     "cluster_swing_median_ms": null,
     "cluster_stance_percent_median": null,
-    "quality_status": "accepted",
-    "accepted": true,
-    "user_decision": "forced_accept",
-    "reason": "accepted by user"
+    "quality_status": "review",
+    "accepted": false,
+    "user_decision": "auto",
+    "reason": "timing cluster unavailable: largest cluster has 4 of required 5 cycles"
   },
   {
     "cycle_index": 6,
     "start_row": 1904,
-    "end_row": 1971,
+    "end_row": 1979,
     "start_ms": 38080.0,
     "end_ms": 39620.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -176,7 +176,7 @@
   {
     "cycle_index": 7,
     "start_row": 1980,
-    "end_row": 2044,
+    "end_row": 2053,
     "start_ms": 39620.0,
     "end_ms": 41120.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -205,7 +205,7 @@
   {
     "cycle_index": 8,
     "start_row": 2054,
-    "end_row": 2119,
+    "end_row": 2148,
     "start_ms": 41120.0,
     "end_ms": 43000.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -234,7 +234,7 @@
   {
     "cycle_index": 9,
     "start_row": 2149,
-    "end_row": 2265,
+    "end_row": 2305,
     "start_ms": 43000.0,
     "end_ms": 46140.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -292,7 +292,7 @@
   {
     "cycle_index": 11,
     "start_row": 2408,
-    "end_row": 2450,
+    "end_row": 2480,
     "start_ms": 48180.0,
     "end_ms": 49620.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -313,15 +313,15 @@
     "cluster_stance_median_ms": null,
     "cluster_swing_median_ms": null,
     "cluster_stance_percent_median": null,
-    "quality_status": "accepted",
-    "accepted": true,
-    "user_decision": "forced_accept",
-    "reason": "accepted by user"
+    "quality_status": "review",
+    "accepted": false,
+    "user_decision": "auto",
+    "reason": "timing cluster unavailable: largest cluster has 4 of required 5 cycles"
   },
   {
     "cycle_index": 12,
     "start_row": 2481,
-    "end_row": 2597,
+    "end_row": 2609,
     "start_ms": 49620.0,
     "end_ms": 52200.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -350,7 +350,7 @@
   {
     "cycle_index": 13,
     "start_row": 2610,
-    "end_row": 2684,
+    "end_row": 2715,
     "start_ms": 52200.0,
     "end_ms": 54340.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -379,7 +379,7 @@
   {
     "cycle_index": 14,
     "start_row": 2716,
-    "end_row": 2839,
+    "end_row": 2862,
     "start_ms": 54340.0,
     "end_ms": 57280.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -408,7 +408,7 @@
   {
     "cycle_index": 15,
     "start_row": 2863,
-    "end_row": 2927,
+    "end_row": 2945,
     "start_ms": 57280.0,
     "end_ms": 58920.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -429,15 +429,15 @@
     "cluster_stance_median_ms": null,
     "cluster_swing_median_ms": null,
     "cluster_stance_percent_median": null,
-    "quality_status": "accepted",
-    "accepted": true,
-    "user_decision": "forced_accept",
-    "reason": "accepted by user"
+    "quality_status": "review",
+    "accepted": false,
+    "user_decision": "auto",
+    "reason": "timing cluster unavailable: largest cluster has 4 of required 5 cycles"
   },
   {
     "cycle_index": 16,
     "start_row": 2946,
-    "end_row": 3074,
+    "end_row": 3098,
     "start_ms": 58920.0,
     "end_ms": 62000.0,
     "state_path": "1\u21922\u21925\u21926\u21927",
@@ -466,7 +466,7 @@
   {
     "cycle_index": 17,
     "start_row": 3099,
-    "end_row": 3159,
+    "end_row": 3192,
     "start_ms": 62000.0,
     "end_ms": 63880.0,
     "state_path": "1\u21922\u21925\u21926\u21927",

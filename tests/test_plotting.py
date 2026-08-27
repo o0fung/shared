@@ -1,7 +1,13 @@
 import pytest
 from matplotlib import colors as mcolors
 
-from gait_analysis.plotting import close_trial_review, create_trial_review, refresh_trial_review
+from gait_analysis.plotting import (
+    angle_summary_series,
+    close_trial_review,
+    create_trial_review,
+    plot_r_statistic_angles,
+    refresh_trial_review,
+)
 from gait_analysis.segmenter import QUALITY_REJECTED, segment_rows
 
 
@@ -57,3 +63,34 @@ def test_trial_review_shading_keeps_incomplete_cycle_status_visible() -> None:
     assert max(first_span.get_xy()[:, 0]) == pytest.approx(0.4)
     assert first_span.get_facecolor() == pytest.approx(mcolors.to_rgba("#C62828", alpha=0.12))
     close_trial_review(review)
+
+
+def test_creates_r_statistic_angle_plot_with_derived_foot_tilt(tmp_path) -> None:
+    summary = [
+        {
+            "gait_percent": 0.0,
+            "walk_pos_rad_mean": 0.5235987755982988,
+            "walk_pos_rad_sd": 0.17453292519943295,
+            "walk_tilt_forward_deg_mean": 5.0,
+            "walk_tilt_forward_deg_sd": 2.0,
+        },
+        {
+            "gait_percent": 100.0,
+            "walk_pos_rad_mean": 0.8726646259971648,
+            "walk_pos_rad_sd": 0.2617993877991494,
+            "walk_tilt_forward_deg_mean": 7.0,
+            "walk_tilt_forward_deg_sd": 3.0,
+        },
+    ]
+    output_path = tmp_path / "angles.png"
+
+    series = angle_summary_series(summary)
+
+    assert series["Ankle Joint Angle"][1].mean() == pytest.approx(0.0)
+    assert series["Leg Tilt Angle"][1].mean() == pytest.approx(0.0)
+    assert series["Foot Tilt Angle"][1].mean() == pytest.approx(0.0)
+    assert series["Ankle Joint Angle"][2][0] == pytest.approx(10.0)
+    assert series["Foot Tilt Angle"][2][0] == pytest.approx(104**0.5)
+    assert plot_r_statistic_angles(summary, output_path)
+    assert output_path.is_file()
+    assert output_path.stat().st_size > 0
